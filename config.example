@@ -1,0 +1,23 @@
+# Simply Plural CLI Configuration File
+# This file stores your settings and API credentials
+
+# API Configuration
+# Get your token from: Simply Plural app -> Settings -> Privacy & Security -> API Tokens
+# Required permissions: Read members, Read switches, Write switches, Read front
+api_token = ""
+
+# API Settings
+# api_timeout = 10                # seconds
+# max_retries = 3
+
+# Default Output Format
+# Options: human, json, prompt, simple
+default_output_format = "human"
+
+# Cache Settings (in seconds)
+cache_fronters_ttl = 900        # 15 minutes
+cache_members_ttl = 3600        # 1 hour
+cache_switches_ttl = 1800       # 30 minutes
+
+# Shell Integration
+shell_update_interval = 60      # seconds between background updates

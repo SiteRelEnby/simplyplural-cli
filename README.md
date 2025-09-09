@@ -4,7 +4,7 @@ A command-line interface for [Simply Plural](https://apparyllis.com/), designed 
 
 ## Features
 
-- **Quick switch registration** - `sp switch Luna`, `sp sw Johnny V`, `sp switch --add` Dax, etc
+- **Quick switch registration** - `sp switch Luna`, `sp sw Johnny V`, `sp switch --add Dax`, etc
 - **Current fronter status** - `sp fronting`, `sp who`, or `sp w`
 - **Shell prompt integration** - Show fronters in your terminal prompt
 - **Member management** - List and view member information

@@ -295,7 +295,6 @@ class ConfigManager:
             'default_output_format': "human",
             
             # Cache Settings
-<<<<<<< HEAD
             'cache_fronters_ttl': 900,    # 15 minutes
             'cache_members_ttl': 3600,    # 1 hour
             'cache_switches_ttl': 1800,   # 30 minutes
@@ -394,13 +393,28 @@ class ConfigManager:
     def cache_fronters_ttl(self) -> int:
         """Get fronters cache TTL in seconds"""
         return self._config.get('cache_fronters_ttl', 900)
-            'cache_fronters_ttl': 300,    # 5 minutes
-            'cache_members_ttl': 3600,    # 1 hour
-            'cache_switches_ttl': 1800,   # 30 minutes
-            
-            # Shell Integration
-            'shell_update_interval': 60,
-        }
+    
+    @property
+    def cache_members_ttl(self) -> int:
+        """Get members cache TTL in seconds"""
+        return self._config.get('cache_members_ttl', 3600)
+    
+    @property
+    def cache_switches_ttl(self) -> int:
+        """Get switches cache TTL in seconds"""
+        return self._config.get('cache_switches_ttl', 1800)
+    
+    @property
+    def shell_update_interval(self) -> int:
+        """Get shell update interval in seconds"""
+        return self._config.get('shell_update_interval', 60)
+    
+    @property
+    def default_output_format(self) -> str:
+        """Get the default output format"""
+        return self._config.get('default_output_format', 'human')
+    
+    # Configuration management methods
     
     def _save_all_profiles(self, all_profiles: Optional[Dict[str, Dict[str, Any]]] = None):
         """Save all profiles to config file atomically"""

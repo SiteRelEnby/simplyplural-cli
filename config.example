@@ -14,10 +14,21 @@ api_token = ""
 # Options: human, json, prompt, simple
 default_output_format = "human"
 
+# Custom Front Display Settings
+# Show type indicators for custom fronts (true/false)
+show_custom_front_indicators = true
+
+# Indicator style: "character" (e.g. ^Garnet) or "text" (e.g. Garnet (custom front))
+custom_front_indicator_style = "character"
+
+# Character to use for character-style indicators
+custom_front_indicator_character = "^"
+
 # Cache Settings (in seconds)
 cache_fronters_ttl = 900        # 15 minutes
 cache_members_ttl = 3600        # 1 hour
 cache_switches_ttl = 1800       # 30 minutes
+cache_custom_fronts_ttl = 3600  # 1 hour
 
 # Shell Integration
 shell_update_interval = 60      # seconds between background updates

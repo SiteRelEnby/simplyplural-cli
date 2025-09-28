@@ -49,12 +49,14 @@ class CacheManager:
                 'fronters': self.config.cache_fronters_ttl,
                 'members': self.config.cache_members_ttl,
                 'switches': self.config.cache_switches_ttl,
+                'custom_fronts': self.config.cache_custom_fronts_ttl,
             }
         else:
             self.default_ttl = {
                 'fronters': 300,    # 5 minutes
                 'members': 3600,    # 1 hour
                 'switches': 1800,   # 30 minutes
+                'custom_fronts': 3600,  # 1 hour
             }
         
         # Memory cache TTL (shorter for responsiveness)
@@ -62,6 +64,7 @@ class CacheManager:
             'fronters': 300,    # 5 minutes - matches file cache for efficiency
             'members': 300,     # 5 minutes
             'switches': 300,    # 5 minutes
+            'custom_fronts': 300,  # 5 minutes
         }
     
     def _get_cache_file(self, key: str) -> Path:
@@ -265,3 +268,27 @@ class CacheManager:
     def invalidate_member(self, member_id: str):
         """Invalidate cached member data"""
         self.invalidate(f'member_{member_id}')
+    
+    def get_custom_fronts(self) -> Optional[List[Dict[str, Any]]]:
+        """Get cached custom fronts data"""
+        return self.get('custom_fronts')
+    
+    def set_custom_fronts(self, data: List[Dict[str, Any]]):
+        """Cache custom fronts data"""
+        self.set('custom_fronts', data)
+    
+    def get_custom_front(self, custom_front_id: str) -> Optional[Dict[str, Any]]:
+        """Get cached individual custom front data"""
+        return self.get(f'custom_front_{custom_front_id}')
+    
+    def set_custom_front(self, custom_front_id: str, data: Dict[str, Any]):
+        """Cache individual custom front data"""
+        self.set(f'custom_front_{custom_front_id}', data)
+    
+    def invalidate_custom_front(self, custom_front_id: str):
+        """Invalidate cached custom front data"""
+        self.invalidate(f'custom_front_{custom_front_id}')
+    
+    def invalidate_custom_fronts(self):
+        """Invalidate all custom fronts cache"""
+        self.invalidate('custom_fronts')

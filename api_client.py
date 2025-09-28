@@ -199,24 +199,37 @@ class SimplyPluralAPI:
         raise APIError(f"Request failed after {self.max_retries} attempts: {last_exception}")
     
     def get_fronters(self) -> Dict[str, Any]:
-        """Get current fronters with resolved member names"""
+        """Get current fronters with resolved member/custom front names"""
         fronters_response = self._request('GET', '/fronters')
         
-        # If it's a list of fronter objects, try to resolve member names
+        # If it's a list of fronter objects, try to resolve names
         if isinstance(fronters_response, list):
             resolved_fronters = []
             for fronter in fronters_response:
                 if 'content' in fronter and 'member' in fronter['content']:
-                    member_id = fronter['content']['member']
+                    entity_id = fronter['content']['member']
+                    is_custom = fronter['content'].get('custom', False)
+                    
                     try:
-                        member = self.get_member(member_id)
-                        fronter_with_name = fronter.copy()
-                        fronter_with_name['name'] = member.get('content', {}).get('name', self._generate_fallback_name(member_id, fronter))
+                        if is_custom:
+                            # It's a custom front
+                            custom_front = self.get_custom_front(entity_id)
+                            fronter_with_name = fronter.copy()
+                            fronter_with_name['name'] = custom_front.get('content', {}).get('name', self._generate_fallback_name(entity_id, fronter))
+                            fronter_with_name['type'] = 'custom_front'
+                        else:
+                            # It's a regular member
+                            member = self.get_member(entity_id)
+                            fronter_with_name = fronter.copy()
+                            fronter_with_name['name'] = member.get('content', {}).get('name', self._generate_fallback_name(entity_id, fronter))
+                            fronter_with_name['type'] = 'member'
+                        
                         resolved_fronters.append(fronter_with_name)
                     except APIError:
-                        # If we can't get member details, use ID as fallback
+                        # If we can't get details, use ID as fallback
                         fronter_with_name = fronter.copy()
-                        fronter_with_name['name'] = self._generate_fallback_name(member_id, fronter)
+                        fronter_with_name['name'] = self._generate_fallback_name(entity_id, fronter)
+                        fronter_with_name['type'] = 'custom_front' if is_custom else 'member'
                         resolved_fronters.append(fronter_with_name)
                 else:
                     resolved_fronters.append(fronter)
@@ -375,30 +388,107 @@ class SimplyPluralAPI:
                 print(f"DEBUG: Failed to get member {member_id}: {e}")
             raise APIError(f"Could not fetch member {member_id}: {e}")
     
-    def register_switch(self, member_names: List[str], note: Optional[str] = None) -> Dict[str, Any]:
-        """Register a switch to one or more members using the frontHistory API"""
+    def get_custom_fronts(self) -> List[Dict[str, Any]]:
+        """Get all custom fronts for this system"""
+        # Try cache first
+        if self.cache:
+            cached_custom_fronts = self.cache.get_custom_fronts()
+            if cached_custom_fronts is not None:
+                if self.debug:
+                    print(f"DEBUG: Using cached custom fronts: {len(cached_custom_fronts)} custom fronts")
+                return cached_custom_fronts
         
-        # Get member IDs from names
+        try:
+            system_id = self.get_system_id()
+            if self.debug:
+                print(f"DEBUG: Fetching custom fronts for system {system_id}")
+            
+            response = self._request('GET', f'/customFronts/{system_id}')
+            
+            # Return the list of custom fronts
+            custom_fronts = response if isinstance(response, list) else []
+            
+            # Cache the results
+            if self.cache:
+                self.cache.set_custom_fronts(custom_fronts)
+            
+            return custom_fronts
+            
+        except APIError as e:
+            if self.debug:
+                print(f"DEBUG: Failed to get custom fronts: {e}")
+            raise APIError(f"Could not fetch custom fronts: {e}")
+    
+    def get_custom_front(self, custom_front_id: str) -> Dict[str, Any]:
+        """Get a specific custom front by ID"""
+        # Try cache first
+        if self.cache:
+            cached_custom_front = self.cache.get_custom_front(custom_front_id)
+            if cached_custom_front is not None:
+                if self.debug:
+                    print(f"DEBUG: Using cached custom front {custom_front_id}")
+                return cached_custom_front
+        
+        try:
+            system_id = self.get_system_id()
+            if self.debug:
+                print(f"DEBUG: Fetching custom front {custom_front_id} for system {system_id}")
+            
+            response = self._request('GET', f'/customFront/{system_id}/{custom_front_id}')
+            
+            if 'content' in response:
+                # Cache the result
+                if self.cache:
+                    self.cache.set_custom_front(custom_front_id, response)
+                return response
+            else:
+                raise APIError(f"Invalid custom front response format")
+            
+        except APIError as e:
+            if self.debug:
+                print(f"DEBUG: Failed to get custom front {custom_front_id}: {e}")
+            raise APIError(f"Could not fetch custom front {custom_front_id}: {e}")
+
+    def register_switch(self, names: List[str], note: Optional[str] = None) -> Dict[str, Any]:
+        """Register a switch to one or more members or custom fronts using the frontHistory API"""
+        
+        # Get both members and custom fronts
         members = self.get_members()
-        # Note: This will fail with KeyError if any member lacks 'content', 'name', or 'id' fields
-        # In practice this shouldn't happen as SP requires names, but edge case exists
-        member_map = {m['content']['name'].lower(): m['id'] for m in members}
+        custom_fronts = self.get_custom_fronts()
         
-        member_ids = []
-        for name in member_names:
-            member_id = member_map.get(name.lower())
-            if not member_id:
-                # Try partial matching
-                partial_matches = [m for m in members if name.lower() in m['content']['name'].lower()]
-                if len(partial_matches) == 1:
-                    member_id = partial_matches[0]['id']
-                elif len(partial_matches) > 1:
-                    names = [m['content']['name'] for m in partial_matches]
-                    raise APIError(f"Ambiguous member name '{name}'. Matches: {', '.join(names)}")
+        # Create maps for name lookup
+        member_map = {m['content']['name'].lower(): {'id': m['id'], 'type': 'member'} for m in members}
+        custom_front_map = {cf['content']['name'].lower(): {'id': cf['id'], 'type': 'custom_front'} for cf in custom_fronts}
+        
+        # Combine both maps for unified lookup
+        entity_map = {**member_map, **custom_front_map}
+        
+        entities = []
+        for name in names:
+            entity = entity_map.get(name.lower())
+            if not entity:
+                # Try partial matching in both members and custom fronts
+                member_matches = [m for m in members if name.lower() in m['content']['name'].lower()]
+                custom_front_matches = [cf for cf in custom_fronts if name.lower() in cf['content']['name'].lower()]
+                
+                all_matches = [
+                    {'entity': m, 'type': 'member'} for m in member_matches
+                ] + [
+                    {'entity': cf, 'type': 'custom_front'} for cf in custom_front_matches
+                ]
+                
+                if len(all_matches) == 1:
+                    match = all_matches[0]
+                    entity = {'id': match['entity']['id'], 'type': match['type']}
+                elif len(all_matches) > 1:
+                    names_list = [f"{match['entity']['content']['name']} ({match['type']})" for match in all_matches]
+                    raise APIError(f"Ambiguous name '{name}'. Matches: {', '.join(names_list)}")
                 else:
-                    available = [m['content']['name'] for m in members]
-                    raise APIError(f"Member '{name}' not found. Available: {', '.join(available)}")
-            member_ids.append(member_id)
+                    available_members = [m['content']['name'] for m in members]
+                    available_custom_fronts = [cf['content']['name'] for cf in custom_fronts]
+                    all_available = [f"{name} (member)" for name in available_members] + [f"{name} (custom_front)" for name in available_custom_fronts]
+                    raise APIError(f"Name '{name}' not found. Available: {', '.join(all_available)}")
+            entities.append(entity)
         
         # Step 1: End all current live fronting sessions
         current_fronters = self._request('GET', '/fronters')
@@ -425,26 +515,27 @@ class SimplyPluralAPI:
                         print(f"DEBUG: Warning - failed to end front session {front_id}: {e}")
                     # Continue anyway - maybe it was already ended
         
-        # Step 2: Create new front sessions for the requested members
+        # Step 2: Create new front sessions for the requested entities (members or custom fronts)
         import random
         results = []
         
-        for member_id in member_ids:
+        for entity in entities:
             # Generate a new ObjectId-style string (24 hex characters)
             new_front_id = ''.join(random.choices('0123456789abcdef', k=24))
             
             start_data = {
-                'member': member_id,
+                'member': entity['id'],
                 'startTime': current_time_ms + 1,  # Slightly after end time
                 'live': True,
-                'custom': False
+                'custom': entity['type'] == 'custom_front'
             }
             
             if note:
                 start_data['customStatus'] = note
             
             if self.debug:
-                print(f"DEBUG: Creating front session {new_front_id} for member {member_id}")
+                entity_type = 'custom front' if entity['type'] == 'custom_front' else 'member'
+                print(f"DEBUG: Creating front session {new_front_id} for {entity_type} {entity['id']}")
                 
             result = self._request('POST', f'/frontHistory/{new_front_id}', json=start_data)
             results.append(result)

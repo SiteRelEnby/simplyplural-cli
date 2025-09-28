@@ -3,14 +3,21 @@
 Simply Plural CLI - Command line interface for Simply Plural
 
 Usage:
-    sp switch <member>              Register a switch
-    sp switch <member1> <member2>   Multiple fronters
-    sp fronting                     Show current fronter(s)
+    sp switch <member>              Register a switch (works with members and custom fronts)
+    sp switch <member1> <member2>   Multiple fronters (any combination)
+    sp fronting                     Show current fronter(s) with type indicators
     sp who                          Alias for fronting
     sp members                      List all members
+    sp members --include-custom     List members and custom fronts
+    sp custom-fronts                List all custom fronts
     sp history                      Recent switches
     sp backup                       Export data
     sp status --format=prompt       Format for shell prompt
+
+Custom Front Support:
+    Simply Plural CLI supports both members and custom fronts seamlessly.
+    Use any name in switch commands - the CLI will automatically detect the type.
+    Custom fronts are shown with "(custom front)" indicators in all displays.
 
 Installation:
     Download this script to ~/bin/ or anywhere in your PATH
@@ -84,6 +91,16 @@ class SimplePluralCLI:
         self.cache = CacheManager(self.config.cache_dir, self.config)
         self.api = SimplyPluralAPI(self.config.api_token, self.config, debug, self.cache) if self.config.api_token else None
         self.shell = ShellIntegrationManager(self.config)
+    
+    def _format_entity_name(self, name: str, entity_type: str) -> str:
+        """Format entity name with appropriate type indicator based on config"""
+        if entity_type == 'custom_front' and self.config.show_custom_front_indicators:
+            if self.config.custom_front_indicator_style == 'character':
+                return f"{self.config.custom_front_indicator_character}{name}"
+            else:  # text style
+                return f"{name} (custom front)"
+        else:
+            return name
     
     def cmd_switch(self, members: List[str], note: Optional[str] = None, co: bool = False):
         """Register a switch"""
@@ -189,7 +206,8 @@ class SimplePluralCLI:
                 'format': 'Output formats:\n  human    Human readable (default)\n  json     JSON for scripts\n  prompt   For shell prompts\n  simple   Just names',
                 'cache': 'Caching behavior:\n  - Fronters cached for 5 minutes\n  - Members cached for 1 hour\n  - Individual member lookups cached\n  - Works offline with cached data',
                 'debug': 'Debug mode:\n  sp --debug <command>    Show API calls and responses\n  sp debug cache          Show cache information\n  sp debug config         Show configuration details\n  sp debug purge          Clear all cached data',
-                'shell': 'Shell integration:\n  sp shell generate       Generate shell integration script\n  sp shell install        Generate and show installation instructions'
+                'shell': 'Shell integration:\n  sp shell generate       Generate shell integration script\n  sp shell install        Generate and show installation instructions',
+                'custom-fronts': 'Custom front support:\n  sp custom-fronts                    List all custom fronts\n  sp switch <custom-front>            Switch to a custom front\n  sp switch <member> <custom-front>   Mixed member/custom front co-fronting\n  sp members --include-custom         Show both members and custom fronts\n  sp fronting                         Shows "(custom front)" indicators\n\nCustom fronts work identically to members in all switch commands.\nThe CLI automatically detects whether a name is a member or custom front.'
             }
             
             if topic.lower() in help_topics:
@@ -203,7 +221,7 @@ class SimplePluralCLI:
             # Show general help (same as --help)
             print(__doc__.strip())
             print("\nFor topic-specific help: sp help <topic>")
-            print("Available topics: config, profiles, switch, format, cache, debug, shell")
+            print("Available topics: config, profiles, switch, format, cache, debug, shell, custom-fronts")
         
         return 0
     
@@ -225,9 +243,11 @@ class SimplePluralCLI:
             
             # Handle both list and dict responses
             if isinstance(fronters, list):
-                fronter_names = [f.get('name', 'Unknown') for f in fronters]
+                fronter_info = [{'name': f.get('name', 'Unknown'), 'type': f.get('type', 'member')} for f in fronters]
             else:
-                fronter_names = [f.get('name', 'Unknown') for f in fronters.get('fronters', [])]
+                fronter_info = [{'name': f.get('name', 'Unknown'), 'type': f.get('type', 'member')} for f in fronters.get('fronters', [])]
+            
+            fronter_names = [f['name'] for f in fronter_info]
             
             if self.debug:
                 print(f"DEBUG: Extracted fronter names: {fronter_names}")
@@ -249,10 +269,15 @@ class SimplePluralCLI:
                 print(', '.join(fronter_names) if fronter_names else "No one fronting")
             else:  # human
                 if fronter_names:
-                    if len(fronter_names) == 1:
-                        print(f"Currently fronting: {fronter_names[0]}")
+                    # Build display names with type indicators
+                    display_names = []
+                    for info in fronter_info:
+                        display_names.append(self._format_entity_name(info['name'], info['type']))
+                    
+                    if len(display_names) == 1:
+                        print(f"Currently fronting: {display_names[0]}")
                     else:
-                        print(f"Currently fronting: {', '.join(fronter_names)}")
+                        print(f"Currently fronting: {', '.join(display_names)}")
                 else:
                     print("No one currently fronting")
                     
@@ -269,8 +294,8 @@ class SimplePluralCLI:
             
         return 0
     
-    def cmd_members(self, fronting_only: bool = False):
-        """List members"""
+    def cmd_members(self, fronting_only: bool = False, include_custom: bool = False):
+        """List members and optionally custom fronts"""
         try:
             if fronting_only:
                 return self.cmd_fronting("human")
@@ -310,7 +335,90 @@ class SimplePluralCLI:
                     display_parts.append(f"- {desc_short}")
                     
                 print(f"  {' '.join(display_parts)}")
+            
+            # Include custom fronts if requested
+            if include_custom:
+                if self.debug:
+                    print("DEBUG: Also fetching custom fronts")
+                
+                custom_fronts = self.cache.get_custom_fronts()
+                if not custom_fronts:
+                    if self.debug:
+                        print("DEBUG: No cached custom fronts found, fetching from API")
+                    custom_fronts = self.api.get_custom_fronts()
+                    self.cache.set_custom_fronts(custom_fronts)
+                elif self.debug:
+                    print(f"DEBUG: Using cached custom fronts: {len(custom_fronts) if custom_fronts else 0} custom fronts")
+                
+                if custom_fronts:
+                    print("\nCustom fronts:")
+                    for custom_front in custom_fronts:
+                        # Extract name from the nested structure
+                        name = custom_front.get('content', {}).get('name', 'Unknown')
+                        desc = custom_front.get('content', {}).get('desc', '')
+                        
+                        # Format name with type indicator
+                        formatted_name = self._format_entity_name(name, 'custom_front')
+                        
+                        # Build the display line
+                        display_parts = [formatted_name]
+                        if desc:
+                            desc_short = desc[:50] + "..." if len(desc) > 50 else desc
+                            display_parts.append(f"- {desc_short}")
+                            
+                        print(f"  {' '.join(display_parts)}")
+                elif self.debug:
+                    print("DEBUG: No custom fronts found")
                     
+        except APIError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+            
+        return 0
+    
+    def cmd_custom_fronts(self, include_in_members: bool = False):
+        """List custom fronts"""
+        try:
+            if self.debug:
+                print("DEBUG: Fetching custom fronts list")
+            
+            custom_fronts = self.cache.get_custom_fronts()
+            if not custom_fronts:
+                if self.debug:
+                    print("DEBUG: No cached custom fronts found, fetching from API")
+                if not self.api:
+                    print("Error: Not configured and no cached data", file=sys.stderr)
+                    return 1
+                custom_fronts = self.api.get_custom_fronts()
+                self.cache.set_custom_fronts(custom_fronts)
+            elif self.debug:
+                print(f"DEBUG: Using cached custom fronts: {len(custom_fronts) if custom_fronts else 0} custom fronts")
+            
+            if self.debug:
+                print(f"DEBUG: Custom fronts response type: {type(custom_fronts)}")
+                print(f"DEBUG: Custom fronts response: {custom_fronts}")
+            
+            if not custom_fronts:
+                print("No custom fronts found")
+                return 0
+            
+            print("Custom fronts:")
+            for custom_front in custom_fronts:
+                # Extract name from the nested structure
+                name = custom_front.get('content', {}).get('name', 'Unknown')
+                desc = custom_front.get('content', {}).get('desc', '')
+                
+                # Format name with type indicator
+                formatted_name = self._format_entity_name(name, 'custom_front')
+                
+                # Build the display line
+                display_parts = [formatted_name]
+                if desc:
+                    desc_short = desc[:50] + "..." if len(desc) > 50 else desc
+                    display_parts.append(f"- {desc_short}")
+                    
+                print(f"  {' '.join(display_parts)}")
+                
         except APIError as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1
@@ -888,6 +996,11 @@ def main():
     # Members command
     members_parser = subparsers.add_parser('members', help='List members')
     members_parser.add_argument('--fronting', action='store_true', help='Show only current fronters')
+    members_parser.add_argument('--include-custom', action='store_true', help='Include custom fronts in the listing')
+    
+    # Custom fronts command
+    custom_fronts_parser = subparsers.add_parser('custom-fronts', help='List custom fronts')
+    custom_fronts_parser.add_argument('--help-alias', action='store_true', help=argparse.SUPPRESS)
     
     # History command
     history_parser = subparsers.add_parser('history', help='Show switch history')
@@ -947,7 +1060,9 @@ def main():
     elif args.command in ['fronting', 'who', 'w']:
         return cli.cmd_fronting(args.format)
     elif args.command == 'members':
-        return cli.cmd_members(args.fronting)
+        return cli.cmd_members(args.fronting, getattr(args, 'include_custom', False))
+    elif args.command == 'custom-fronts':
+        return cli.cmd_custom_fronts()
     elif args.command == 'history':
         period = getattr(args, 'period', 'recent')
         return cli.cmd_history(period, args.count)

@@ -208,7 +208,8 @@ class ConfigManager:
             ("Cache Settings", [
                 "cache_fronters_ttl",
                 "cache_members_ttl",
-                "cache_switches_ttl"
+                "cache_switches_ttl",
+                "cache_custom_fronts_ttl"
             ]),
             ("Shell Integration", [
                 "shell_update_interval"
@@ -293,11 +294,15 @@ class ConfigManager:
             
             # Display Settings
             'default_output_format': "human",
+            'show_custom_front_indicators': True,
+            'custom_front_indicator_style': "character",  # "text" or "character"
+            'custom_front_indicator_character': "^",
             
             # Cache Settings
             'cache_fronters_ttl': 900,    # 15 minutes
             'cache_members_ttl': 3600,    # 1 hour
             'cache_switches_ttl': 1800,   # 30 minutes
+            'cache_custom_fronts_ttl': 3600,  # 1 hour (same as members)
             
             # Shell Integration
             'shell_update_interval': 60,
@@ -405,6 +410,11 @@ class ConfigManager:
         return self._config.get('cache_switches_ttl', 1800)
     
     @property
+    def cache_custom_fronts_ttl(self) -> int:
+        """Get custom fronts cache TTL in seconds"""
+        return self._config.get('cache_custom_fronts_ttl', 3600)
+    
+    @property
     def shell_update_interval(self) -> int:
         """Get shell update interval in seconds"""
         return self._config.get('shell_update_interval', 60)
@@ -413,6 +423,21 @@ class ConfigManager:
     def default_output_format(self) -> str:
         """Get the default output format"""
         return self._config.get('default_output_format', 'human')
+    
+    @property
+    def show_custom_front_indicators(self) -> bool:
+        """Get whether to show custom front type indicators"""
+        return self._config.get('show_custom_front_indicators', True)
+    
+    @property
+    def custom_front_indicator_style(self) -> str:
+        """Get custom front indicator style ('text' or 'character')"""
+        return self._config.get('custom_front_indicator_style', 'text')
+    
+    @property
+    def custom_front_indicator_character(self) -> str:
+        """Get custom front indicator character"""
+        return self._config.get('custom_front_indicator_character', '^')
     
     # Configuration management methods
     
@@ -518,6 +543,11 @@ class ConfigManager:
         return self._config.get('cache_switches_ttl', 1800)
     
     @property
+    def cache_custom_fronts_ttl(self) -> int:
+        """Get custom fronts cache TTL in seconds"""
+        return self._config.get('cache_custom_fronts_ttl', 3600)
+    
+    @property
     def api_timeout(self) -> int:
         """Get API timeout in seconds"""
         return self._config.get('api_timeout', 10)
@@ -556,7 +586,7 @@ class ConfigManager:
             issues.append("API token not set. Run 'sp config --setup'")
         
         # Check cache TTL values
-        for key in ['cache_fronters_ttl', 'cache_members_ttl', 'cache_switches_ttl']:
+        for key in ['cache_fronters_ttl', 'cache_members_ttl', 'cache_switches_ttl', 'cache_custom_fronts_ttl']:
             if self._config.get(key, 0) < 0:
                 issues.append(f"{key} cannot be negative")
         

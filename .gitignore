@@ -8,6 +8,10 @@ __pycache__/
 .installed.cfg
 *.egg
 
+# Virtual environments
+.venv/
+venv/
+
 # Build / packaging
 build/
 develop-eggs/

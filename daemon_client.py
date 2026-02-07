@@ -217,13 +217,15 @@ class DaemonClientSync:
         self.client = DaemonClient(profile, timeout)
     
     def _run(self, coro):
-        """Run async coroutine in event loop"""
+        """Run async coroutine synchronously, even if called from async context"""
         try:
-            loop = asyncio.get_running_loop()
-            # Already in event loop, create task
-            return asyncio.create_task(coro)
+            asyncio.get_running_loop()
+            # Already in an event loop - run in a separate thread to avoid blocking
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result()
         except RuntimeError:
-            # No event loop, create new one
+            # No event loop, safe to use asyncio.run directly
             return asyncio.run(coro)
     
     def is_running(self) -> bool:

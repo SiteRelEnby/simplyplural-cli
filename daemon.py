@@ -18,7 +18,6 @@ import signal
 
 try:
     import websockets
-    from websockets.client import WebSocketClientProtocol
 except ImportError:
     print("Error: websockets library not installed")
     print("Install with: pip3 install websockets>=12.0")
@@ -66,7 +65,7 @@ class WebSocketManager:
         self.debug = debug
         
         # Connection state
-        self.ws: Optional[WebSocketClientProtocol] = None
+        self.ws = None
         self.authenticated = False
         self.running = False
         self.reconnect_delay = WS_RECONNECT_INITIAL_DELAY
@@ -386,6 +385,15 @@ class DaemonState:
         else:
             self.logger.setLevel(logging.INFO)
     
+    def _seed_front_history(self, fronters_data):
+        """Populate front_history from fronters so WebSocket updates merge correctly"""
+        for entry in fronters_data:
+            entry_id = entry.get('id') or entry.get('_id')
+            if entry_id:
+                self.front_history[entry_id] = entry.get('content', entry)
+        self.last_update_times['front_history'] = time.time()
+        self.logger.info(f"Seeded front_history with {len(self.front_history)} entries")
+
     async def initialize(self):
         """
         Initialize state with data from API or cache
@@ -403,7 +411,9 @@ class DaemonState:
                     self.current_fronters = fronters_data
                     self.last_update_times['fronters'] = time.time()
                     self.logger.info(f"Loaded {len(fronters_data)} current fronters")
-                    
+
+                    self._seed_front_history(fronters_data)
+
                     # Write to cache
                     if self.cache:
                         self.cache.set_fronters(fronters_data)
@@ -440,20 +450,21 @@ class DaemonState:
                         cached_fronters = self.cache.get_fronters()
                         if cached_fronters:
                             self.current_fronters = cached_fronters
+                            self._seed_front_history(cached_fronters)
                             self.logger.info(f"Loaded {len(cached_fronters)} fronters from cache")
-                        
+
                         cached_members = self.cache.get_members()
                         if cached_members:
                             self.members = {m.get('id') or m.get('_id'): m for m in cached_members}
                             self.logger.info(f"Loaded {len(self.members)} members from cache")
-                        
+
                         cached_custom_fronts = self.cache.get_custom_fronts()
                         if cached_custom_fronts:
                             self.custom_fronts = {cf.get('id') or cf.get('_id'): cf for cf in cached_custom_fronts}
                             self.logger.info(f"Loaded {len(self.custom_fronts)} custom fronts from cache")
                     except Exception as cache_error:
                         self.logger.error(f"Error loading from cache: {cache_error}")
-        
+
         # If no API, try cache first
         elif self.cache:
             self.logger.info("No API client available, loading from cache...")
@@ -461,6 +472,7 @@ class DaemonState:
                 cached_fronters = self.cache.get_fronters()
                 if cached_fronters:
                     self.current_fronters = cached_fronters
+                    self._seed_front_history(cached_fronters)
                     self.logger.info(f"Loaded {len(cached_fronters)} fronters from cache")
                 
                 cached_members = self.cache.get_members()

@@ -10,6 +10,7 @@ A command-line interface for [Simply Plural](https://apparyllis.com/), designed 
 - **Member and custom front management** - List and view information for both types
 - **Switch history** - View recent switches and patterns
 - **Backup/export** - Export your data **(WARNING: This feature is not complete, and should not be relied on as your only backup!)**
+- **Daemon mode** - Optional WebSocket daemon for instant responses and real-time updates
 - **Offline-friendly** - Configurable caching reduces API calls, degrades gracefully, and works offline
 - **Cross-platform** - Python 3.x with minimal, easily-findable dependencies.
 
@@ -25,7 +26,7 @@ cd simply-plural-cli
 python3 setup.py
 
 # Or install manually:
-python3 -m pip install requests
+python3 -m pip install requests websockets
 python3 sp.py config --setup
 ```
 
@@ -42,7 +43,7 @@ sp --help
 ### Manual Installation
 ```bash
 # Install dependencies
-python3 -m pip install requests
+python3 -m pip install requests websockets
 
 # Copy to your PATH
 [[ ! -d ~/bin ]] && mkdir ~/bin
@@ -56,7 +57,7 @@ ln -s /path/to/sp.py ~/bin/sp
 ### Windows Installation
 ```cmd
 # Install dependencies
-python -m pip install requests
+python -m pip install requests websockets
 
 # Copy to a directory in your PATH or use full path
 copy sp.py C:\Users\%USERNAME%\bin\sp.py
@@ -319,6 +320,75 @@ sp --debug _internal_update_status  # Debug output
 - If you're seeing delays, check for conflicts with other prompt modifications
 - Use `time sp_prompt` to measure performance
 
+## Daemon Mode
+
+The CLI includes an optional background daemon that maintains a persistent WebSocket connection to the Simply Plural API. When running, all CLI queries are answered instantly from memory instead of making HTTP requests.
+
+### Why Use the Daemon?
+
+Without the daemon, every `sp fronting` or `sp who` call makes a round-trip HTTP request to the API (~200-500ms). With the daemon running, the same commands return in under 1ms because the data is already in memory, kept up to date in real time via WebSocket.
+
+This is especially useful if you:
+- Use shell prompt integration (updates are instant instead of cached)
+- Run `sp` commands frequently
+- Want real-time awareness of switches made from the app or by other system members
+
+### Usage
+
+```bash
+# Start the daemon
+sp daemon start
+
+# Check status
+sp daemon status
+
+# Stop it
+sp daemon stop
+
+# Restart
+sp daemon restart
+```
+
+The daemon runs in the background and is per-profile:
+
+```bash
+# Start daemon for a specific profile
+sp --profile friend-system daemon start
+```
+
+### How It Works
+
+```
+Simply Plural API
+       │
+       │ WebSocket (real-time updates)
+       ▼
+┌─────────────────────┐
+│   Daemon Process     │
+│                      │
+│  WebSocket ──▶ State │
+│  (live connection)   │
+│                      │
+│  Unix Socket Server  │
+└──────────┬──────────┘
+           │ IPC (~<1ms)
+           ▼
+┌─────────────────────┐
+│   sp fronting        │
+│   (instant response) │
+└─────────────────────┘
+```
+
+- The daemon connects to the Simply Plural WebSocket and authenticates
+- Fronters, members, and custom fronts are loaded into memory at startup
+- WebSocket push updates keep the state current in real time
+- CLI commands query the daemon over a Unix domain socket for instant results
+- If the daemon isn't running, the CLI transparently falls back to the REST API
+
+### Daemon with Shell Integration
+
+When the daemon is running, shell prompt updates reflect switches immediately rather than waiting for cache expiry.
+
 ## Configuration
 
 Configuration is stored in platform-appropriate locations:
@@ -401,12 +471,9 @@ The defaults should work fine for normal usage with minimal lag. **Please don't*
 - Disable caching just because you can
 - Run large numbers of parallel requests
 
-### High-Frequency Updates
+### Real-Time Updates
 
-If you genuinely need near-real-time updates (more frequent than every 30 minutes), consider:
-
-1. **WebSocket connections** - See the [Socket documentation](https://docs.apparyllis.com/docs/getting-started/socket)
-2. **Contributing** - PRs are welcome if you want to add socket support! 🚀
+If you need near-real-time updates, use the [daemon mode](#daemon-mode) which maintains a WebSocket connection and receives push updates instantly, with zero polling.
 
 ## Caching
 
@@ -516,7 +583,6 @@ For developers and advanced users:
 
 Feel free to submit issues and pull requests. Areas where contributions are especially welcome:
 
-- WebSocket support for real-time updates
 - Additional output formats
 - Enhanced name matching (fuzzy/case-insensitive)
 - Platform-specific integrations

@@ -12,7 +12,18 @@ Usage:
     sp custom-fronts                List all custom fronts
     sp history                      Recent switches
     sp backup                       Export data
+    sp cache clear                  Clear cache for current profile
+    sp cache clear --all            Clear cache for all profiles
     sp status --format=prompt       Format for shell prompt
+
+Daemon (Real-time Updates):
+    sp daemon start                 Start background daemon for instant responses
+    sp daemon stop                  Stop the daemon
+    sp daemon status                Show daemon status and statistics
+    sp daemon restart               Restart the daemon
+    
+    When daemon is running, all commands use it for sub-millisecond responses.
+    Falls back to API automatically if daemon not available.
 
 Custom Front Support:
     Simply Plural CLI supports both members and custom fronts seamlessly.
@@ -63,6 +74,7 @@ try:
     from cache_manager import CacheManager
     from config_manager import ConfigManager
     from shell_integration import ShellIntegrationManager
+    from daemon_client import DaemonClientSync
 except ImportError:
     # If running as standalone script, add current directory to path
     import sys
@@ -77,6 +89,7 @@ except ImportError:
         from cache_manager import CacheManager
         from config_manager import ConfigManager
         from shell_integration import ShellIntegrationManager
+        from daemon_client import DaemonClientSync
     except ImportError as e:
         print(f"Error: Failed to import required modules: {e}")
         print("Make sure all files are in the same directory as this script,")
@@ -87,10 +100,14 @@ except ImportError:
 class SimplePluralCLI:
     def __init__(self, profile: str = "default", debug: bool = False):
         self.debug = debug
+        self.profile = profile
         self.config = ConfigManager(profile)
-        self.cache = CacheManager(self.config.cache_dir, self.config)
+        # Use profile-specific cache directory to prevent cache collisions between profiles
+        self.cache = CacheManager(self.config.get_profile_cache_dir(), self.config)
         self.api = SimplyPluralAPI(self.config.api_token, self.config, debug, self.cache) if self.config.api_token else None
         self.shell = ShellIntegrationManager(self.config)
+        # Initialize daemon client
+        self.daemon_client = DaemonClientSync(profile)
     
     def _format_entity_name(self, name: str, entity_type: str) -> str:
         """Format entity name with appropriate type indicator based on config"""
@@ -101,6 +118,49 @@ class SimplePluralCLI:
                 return f"{name} (custom front)"
         else:
             return name
+    
+    def _try_daemon_or_api(self, method_name: str, fallback_func, *args, **kwargs):
+        """
+        Try to get data from daemon first, fall back to API on any error.
+        
+        Args:
+            method_name: Name of the daemon client method to call
+            fallback_func: API function to call if daemon unavailable
+            *args, **kwargs: Arguments to pass to fallback function
+            
+        Returns:
+            Data from daemon or API
+        """
+        # Try daemon first if it's running
+        if self.daemon_client.is_running():
+            try:
+                # Get data from daemon
+                daemon_method = getattr(self.daemon_client, method_name)
+                result = daemon_method()
+                
+                if self.debug:
+                    print("[DEBUG] Used daemon (instant response)")
+                
+                # Extract the actual data - daemon returns wrapped format
+                if method_name == 'get_fronters':
+                    return result.get('fronters', [])
+                elif method_name == 'get_members':
+                    return result.get('members', [])
+                elif method_name == 'get_custom_fronts':
+                    return result.get('custom_fronts', [])
+                else:
+                    return result
+                    
+            except Exception as e:
+                if self.debug:
+                    print(f"[DEBUG] Daemon error ({e}), falling back to API")
+                # Fall through to API
+        
+        # Use API (daemon not running or error)
+        if self.debug and not self.daemon_client.is_running():
+            print("[DEBUG] Daemon not running, using API")
+        
+        return fallback_func(*args, **kwargs)
     
     def cmd_switch(self, members: List[str], note: Optional[str] = None, co: bool = False):
         """Register a switch"""
@@ -145,6 +205,72 @@ class SimplePluralCLI:
         
         return 0
     
+    def cmd_cache_clear(self, all_profiles: bool = False):
+        """Clear cache for current profile or all profiles"""
+        import shutil
+        
+        if all_profiles:
+            # Clear cache for all profiles
+            print("Clearing cache for all profiles...")
+            base_cache_dir = self.config.cache_dir
+            
+            if not base_cache_dir.exists():
+                print("No cache directory found.")
+                return 0
+            
+            # List all profile cache subdirectories
+            profile_dirs = [d for d in base_cache_dir.iterdir() if d.is_dir()]
+            
+            if not profile_dirs:
+                print("No cached data found.")
+                return 0
+            
+            print(f"Found {len(profile_dirs)} profile cache(s):")
+            for profile_dir in profile_dirs:
+                try:
+                    # Count files
+                    file_count = len(list(profile_dir.glob('*.json')))
+                    print(f"  - {profile_dir.name} ({file_count} file(s))")
+                    
+                    # Remove the directory
+                    shutil.rmtree(profile_dir)
+                    print(f"    [OK] Cleared")
+                except Exception as e:
+                    print(f"    [ERROR] {e}")
+            
+            print("\n[OK] All profile caches cleared.")
+        else:
+            # Clear cache for current profile only
+            print(f"Clearing cache for profile '{self.config.profile}'...")
+            profile_cache_dir = self.config.get_profile_cache_dir()
+            
+            if not profile_cache_dir.exists():
+                print("No cache directory found.")
+                return 0
+            
+            # Show what we're about to delete
+            cache_files = list(profile_cache_dir.glob('*.json'))
+            if cache_files:
+                print(f"Found {len(cache_files)} cached file(s):")
+                for cache_file in cache_files:
+                    print(f"  - {cache_file.name}")
+            else:
+                print("No cached data found.")
+                return 0
+            
+            try:
+                # Clear the cache directory
+                shutil.rmtree(profile_cache_dir)
+                # Recreate empty directory
+                profile_cache_dir.mkdir(parents=True, exist_ok=True)
+                print("\n[OK] Cache cleared successfully.")
+                print("Next API calls will fetch fresh data.")
+            except Exception as e:
+                print(f"\n[ERROR] Failed to clear cache: {e}")
+                return 1
+        
+        return 0
+    
     def cmd_debug(self, action: str):
         """Debug and diagnostic commands"""
         if action == 'cache':
@@ -168,30 +294,16 @@ class SimplePluralCLI:
             print(f"Profile: {self.config.profile}")
             print(f"Config file: {self.config.config_file}")
             print(f"Cache dir: {self.config.cache_dir}")
+            print(f"Profile cache dir: {self.config.get_profile_cache_dir()}")
             print(f"Token: {'Set' if self.config.api_token else 'Not set'}")
             print(f"API timeout: {self.config.api_timeout}s")
             print(f"Max retries: {self.config.max_retries}")
             
         elif action == 'purge':
-            print("Purging all cached data...")
-            try:
-                # Show what we're about to delete
-                cache_info = self.cache.get_cache_info()
-                if cache_info:
-                    print(f"Found {len(cache_info)} cached items:")
-                    for key in cache_info.keys():
-                        print(f"  - {key}")
-                else:
-                    print("No cached data found.")
-                
-                # Clear the cache
-                self.cache.clear_all()
-                print("✓ Cache purged successfully.")
-                print("Next API calls will fetch fresh data.")
-                
-            except Exception as e:
-                print(f"Error purging cache: {e}")
-                return 1
+            # Deprecated - redirect to cache clear command
+            print("Note: 'debug purge' is deprecated. Use 'cache clear' instead.")
+            print()
+            return self.cmd_cache_clear(all_profiles=False)
                 
         return 0
     
@@ -204,8 +316,8 @@ class SimplePluralCLI:
                 'profiles': 'Profile management:\n  sp --profile <n> <command>     Use specific profile\n  sp config --list-profiles        List profiles\n  sp config --create-profile <n>   Create profile\n  sp config --delete-profile <n>   Delete profile',
                 'switch': 'Switch registration:\n  sp switch <member>               Switch to member\n  sp switch <member1> <member2>    Multiple fronters\n  sp switch --co <member>          Add co-fronter\n  sp switch --add <member>          (alias for --co)\n  sp switch <member> --note "text"  Add note\n  sp sw <member>                   Alias for `sp switch`',
                 'format': 'Output formats:\n  human    Human readable (default)\n  json     JSON for scripts\n  prompt   For shell prompts\n  simple   Just names',
-                'cache': 'Caching behavior:\n  - Fronters cached for 5 minutes\n  - Members cached for 1 hour\n  - Individual member lookups cached\n  - Works offline with cached data',
-                'debug': 'Debug mode:\n  sp --debug <command>    Show API calls and responses\n  sp debug cache          Show cache information\n  sp debug config         Show configuration details\n  sp debug purge          Clear all cached data',
+                'cache': 'Cache management:\n  sp cache clear          Clear cache for current profile\n  sp cache clear --all    Clear cache for all profiles\n\nCaching behavior:\n  - Fronters cached for 15 minutes\n  - Members cached for 1 hour\n  - Custom fronts cached for 1 hour\n  - Profile-specific cache isolation\n  - Works offline with cached data',
+                'debug': 'Debug mode:\n  sp --debug <command>    Show API calls and responses\n  sp debug cache          Show cache information\n  sp debug config         Show configuration details\n  sp debug purge          Clear cached data (deprecated, use "cache clear")',
                 'shell': 'Shell integration:\n  sp shell generate       Generate shell integration script\n  sp shell install        Generate and show installation instructions',
                 'custom-fronts': 'Custom front support:\n  sp custom-fronts                    List all custom fronts\n  sp switch <custom-front>            Switch to a custom front\n  sp switch <member> <custom-front>   Mixed member/custom front co-fronting\n  sp members --include-custom         Show both members and custom fronts\n  sp fronting                         Shows "(custom front)" indicators\n\nCustom fronts work identically to members in all switch commands.\nThe CLI automatically detects whether a name is a member or custom front.'
             }
@@ -228,18 +340,44 @@ class SimplePluralCLI:
     def cmd_fronting(self, format_type: str = "human"):
         """Show current fronter(s)"""
         try:
-            # Try cache first for speed
-            fronters = self.cache.get_fronters()
-            if not fronters:
+            # Try daemon first (instant + always fresh), then cache, then API
+            if self.daemon_client.is_running():
                 if self.debug:
-                    print("DEBUG: No cached fronters found, fetching from API")
-                if not self.api:
-                    print("Error: Not configured and no cached data", file=sys.stderr)
-                    return 1
-                fronters = self.api.get_fronters()
-                self.cache.set_fronters(fronters)
-            elif self.debug:
-                print(f"DEBUG: Using cached fronters: {json.dumps(fronters, indent=2) if isinstance(fronters, dict) else fronters}")
+                    print("[DEBUG] Daemon is running, attempting to fetch from daemon...")
+                try:
+                    result = self.daemon_client.get_fronters()
+                    fronters = result.get('fronters', [])
+                    if self.debug:
+                        print("[DEBUG] ✓ Got fronters from daemon (instant response)")
+                except Exception as e:
+                    if self.debug:
+                        print(f"[DEBUG] ✗ Daemon error: {e}")
+                        print("[DEBUG] Falling back to cache/API...")
+                    fronters = None
+            else:
+                if self.debug:
+                    print("[DEBUG] Daemon not running, will use cache/API")
+                fronters = None
+            
+            # Fall back to cache if daemon not available
+            if fronters is None:
+                if self.debug:
+                    print("[DEBUG] Checking cache...")
+                fronters = self.cache.get_fronters()
+                if not fronters:
+                    if self.debug:
+                        print("[DEBUG] No cached fronters found, fetching from API")
+                    if not self.api:
+                        print("Error: Not configured and no cached data", file=sys.stderr)
+                        return 1
+                    if self.debug:
+                        print("[DEBUG] Calling API...")
+                    fronters = self.api.get_fronters()
+                    self.cache.set_fronters(fronters)
+                    if self.debug:
+                        print("[DEBUG] ✓ Got fronters from API")
+                elif self.debug:
+                    print(f"[DEBUG] ✓ Using cached fronters: {len(fronters)} entries")
             
             # Handle both list and dict responses
             if isinstance(fronters, list):
@@ -303,17 +441,44 @@ class SimplePluralCLI:
             if self.debug:
                 print("DEBUG: Fetching members list")
             
-            members = self.cache.get_members()
-            if not members:
+            # Try daemon first, then cache, then API
+            if self.daemon_client.is_running():
                 if self.debug:
-                    print("DEBUG: No cached members found, fetching from API")
-                if not self.api:
-                    print("Error: Not configured and no cached data", file=sys.stderr)
-                    return 1
-                members = self.api.get_members()
-                self.cache.set_members(members)
-            elif self.debug:
-                print(f"DEBUG: Using cached members: {len(members) if members else 0} members")
+                    print("[DEBUG] Daemon is running, attempting to fetch from daemon...")
+                try:
+                    result = self.daemon_client.get_members()
+                    members = result.get('members', [])
+                    if self.debug:
+                        print("[DEBUG] ✓ Got members from daemon (instant response)")
+                except Exception as e:
+                    if self.debug:
+                        print(f"[DEBUG] ✗ Daemon error: {e}")
+                        print("[DEBUG] Falling back to cache/API...")
+                    members = None
+            else:
+                if self.debug:
+                    print("[DEBUG] Daemon not running, will use cache/API")
+                members = None
+            
+            # Fall back to cache if daemon not available
+            if members is None:
+                if self.debug:
+                    print("[DEBUG] Checking cache...")
+                members = self.cache.get_members()
+                if not members:
+                    if self.debug:
+                        print("[DEBUG] No cached members found, fetching from API")
+                    if not self.api:
+                        print("Error: Not configured and no cached data", file=sys.stderr)
+                        return 1
+                    if self.debug:
+                        print("[DEBUG] Calling API...")
+                    members = self.api.get_members()
+                    self.cache.set_members(members)
+                    if self.debug:
+                        print("[DEBUG] ✓ Got members from API")
+                elif self.debug:
+                    print(f"[DEBUG] ✓ Using cached members: {len(members)} entries")
             
             if self.debug:
                 print(f"DEBUG: Members response type: {type(members)}")
@@ -382,17 +547,44 @@ class SimplePluralCLI:
             if self.debug:
                 print("DEBUG: Fetching custom fronts list")
             
-            custom_fronts = self.cache.get_custom_fronts()
-            if not custom_fronts:
+            # Try daemon first, then cache, then API
+            if self.daemon_client.is_running():
                 if self.debug:
-                    print("DEBUG: No cached custom fronts found, fetching from API")
-                if not self.api:
-                    print("Error: Not configured and no cached data", file=sys.stderr)
-                    return 1
-                custom_fronts = self.api.get_custom_fronts()
-                self.cache.set_custom_fronts(custom_fronts)
-            elif self.debug:
-                print(f"DEBUG: Using cached custom fronts: {len(custom_fronts) if custom_fronts else 0} custom fronts")
+                    print("[DEBUG] Daemon is running, attempting to fetch from daemon...")
+                try:
+                    result = self.daemon_client.get_custom_fronts()
+                    custom_fronts = result.get('custom_fronts', [])
+                    if self.debug:
+                        print("[DEBUG] ✓ Got custom fronts from daemon (instant response)")
+                except Exception as e:
+                    if self.debug:
+                        print(f"[DEBUG] ✗ Daemon error: {e}")
+                        print("[DEBUG] Falling back to cache/API...")
+                    custom_fronts = None
+            else:
+                if self.debug:
+                    print("[DEBUG] Daemon not running, will use cache/API")
+                custom_fronts = None
+            
+            # Fall back to cache if daemon not available
+            if custom_fronts is None:
+                if self.debug:
+                    print("[DEBUG] Checking cache...")
+                custom_fronts = self.cache.get_custom_fronts()
+                if not custom_fronts:
+                    if self.debug:
+                        print("[DEBUG] No cached custom fronts found, fetching from API")
+                    if not self.api:
+                        print("Error: Not configured and no cached data", file=sys.stderr)
+                        return 1
+                    if self.debug:
+                        print("[DEBUG] Calling API...")
+                    custom_fronts = self.api.get_custom_fronts()
+                    self.cache.set_custom_fronts(custom_fronts)
+                    if self.debug:
+                        print("[DEBUG] ✓ Got custom fronts from API")
+                elif self.debug:
+                    print(f"[DEBUG] ✓ Using cached custom fronts: {len(custom_fronts)} entries")
             
             if self.debug:
                 print(f"DEBUG: Custom fronts response type: {type(custom_fronts)}")
@@ -752,6 +944,184 @@ class SimplePluralCLI:
             
         return 0
     
+    def cmd_daemon(self, action: str):
+        """Daemon management commands"""
+        if action == 'start':
+            return self._daemon_start()
+        elif action == 'stop':
+            return self._daemon_stop()
+        elif action == 'status':
+            return self._daemon_status()
+        elif action == 'restart':
+            return self._daemon_restart()
+        else:
+            print(f"Unknown daemon action: {action}", file=sys.stderr)
+            return 1
+    
+    def _daemon_start(self):
+        """Start the daemon"""
+        # Check if already running
+        if self.daemon_client.is_running():
+            try:
+                # Try to ping it to verify it's actually alive
+                if self.daemon_client.ping():
+                    print("[OK] Daemon already running")
+                    if self.debug:
+                        status = self.daemon_client.get_status()
+                        ws_status = status.get('websocket', {})
+                        uptime = ws_status.get('uptime', 0)
+                        print(f"Uptime: {uptime:.1f}s")
+                    return 0
+                else:
+                    # Ping failed, socket is stale
+                    if self.debug:
+                        print("[DEBUG] Found stale socket, cleaning up...")
+                    socket_path = f"/tmp/sp-daemon-{self.profile}.sock"
+                    if os.path.exists(socket_path):
+                        os.unlink(socket_path)
+            except Exception as e:
+                # Daemon not responding, clean up socket
+                if self.debug:
+                    print(f"[DEBUG] Daemon not responding ({e}), cleaning up...")
+                socket_path = f"/tmp/sp-daemon-{self.profile}.sock"
+                if os.path.exists(socket_path):
+                    os.unlink(socket_path)
+        
+        # Find daemon.py in the module path
+        # Try multiple locations where daemon.py might be
+        daemon_script = None
+        search_paths = [
+            Path(__file__).parent / "daemon.py",  # Same directory as sp script
+            Path.home() / ".local" / "share" / "simply-plural-cli" / "daemon.py",  # Installed location
+            Path.cwd() / "daemon.py",  # Current directory
+        ]
+        
+        for path in search_paths:
+            if path.exists():
+                daemon_script = path
+                break
+        
+        if not daemon_script:
+            print("Error: daemon.py not found", file=sys.stderr)
+            print("Searched in:", file=sys.stderr)
+            for path in search_paths:
+                print(f"  {path}", file=sys.stderr)
+            return 1
+        
+        # Build command
+        cmd = [sys.executable, str(daemon_script), '--profile', self.profile]
+        if self.debug:
+            cmd.append('--debug')
+        
+        try:
+            # Start daemon in background
+            if sys.platform == 'win32':
+                # Windows: Use CREATE_NEW_PROCESS_GROUP
+                process = subprocess.Popen(
+                    cmd,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            else:
+                # Unix: Use nohup-style backgrounding
+                process = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+            
+            # Give it a moment to start
+            time.sleep(2)
+            
+            # Verify it started
+            if self.daemon_client.is_running():
+                try:
+                    if self.daemon_client.ping():
+                        print(f"[OK] Daemon started (profile: {self.profile})")
+                        socket_path = f"/tmp/sp-daemon-{self.profile}.sock"
+                        print(f"Socket: {socket_path}")
+                        return 0
+                except:
+                    pass
+            
+            print("[WARN] Daemon may have started but not responding yet")
+            print("Run 'sp daemon status' to check")
+            return 0
+            
+        except Exception as e:
+            print(f"Error starting daemon: {e}", file=sys.stderr)
+            return 1
+    
+    def _daemon_stop(self):
+        """Stop the daemon"""
+        if not self.daemon_client.is_running():
+            print("Daemon not running")
+            return 0
+        
+        socket_path = f"/tmp/sp-daemon-{self.profile}.sock"
+        
+        # Try to find daemon process and kill it
+        # For now, just remove the socket and let it die naturally
+        try:
+            if os.path.exists(socket_path):
+                os.unlink(socket_path)
+                print("[OK] Daemon stopped")
+            return 0
+        except Exception as e:
+            print(f"Error stopping daemon: {e}", file=sys.stderr)
+            return 1
+    
+    def _daemon_status(self):
+        """Show daemon status"""
+        if not self.daemon_client.is_running():
+            print("Daemon: Not running")
+            socket_path = f"/tmp/sp-daemon-{self.profile}.sock"
+            print(f"Socket: {socket_path} (not found)")
+            return 1
+        
+        try:
+            status = self.daemon_client.get_status()
+            ws_status = status.get('websocket', {})
+            state_status = status.get('state', {})
+            
+            print("Daemon: Running")
+            print(f"Profile: {self.profile}")
+            socket_path = status.get('socket_path', f"/tmp/sp-daemon-{self.profile}.sock")
+            print(f"Socket: {socket_path}")
+            print()
+            print("WebSocket:")
+            print(f"  Connected: {ws_status.get('connected', False)}")
+            print(f"  Authenticated: {ws_status.get('authenticated', False)}")
+            uptime = ws_status.get('uptime', 0)
+            print(f"  Uptime: {uptime:.1f}s")
+            print(f"  Messages received: {ws_status.get('messages_received', 0)}")
+            print(f"  Reconnects: {ws_status.get('reconnect_count', 0)}")
+            print()
+            print("State:")
+            state_uptime = state_status.get('uptime', 0)
+            print(f"  Uptime: {state_uptime:.1f}s")
+            print(f"  Updates processed: {state_status.get('update_count', 0)}")
+            print(f"  Fronters: {state_status.get('fronters_count', 0)}")
+            print(f"  Members: {state_status.get('members_count', 0)}")
+            print(f"  Custom fronts: {state_status.get('custom_fronts_count', 0)}")
+            
+            return 0
+        except Exception as e:
+            print(f"Error getting daemon status: {e}", file=sys.stderr)
+            return 1
+    
+    def _daemon_restart(self):
+        """Restart the daemon"""
+        print("Stopping daemon...")
+        self._daemon_stop()
+        time.sleep(2)
+        print("Starting daemon...")
+        return self._daemon_start()
+    
     def cmd_shell(self, action: str):
         """Shell integration management"""
         if action == 'generate':
@@ -1041,6 +1411,17 @@ def main():
     # Internal commands
     internal_parser = subparsers.add_parser('_internal_update_status', help=argparse.SUPPRESS)
     
+    # Cache commands
+    cache_parser = subparsers.add_parser('cache', help='Cache management')
+    cache_parser.add_argument('action', choices=['clear'], help='Cache action to perform')
+    cache_parser.add_argument('--all', action='store_true', dest='all_profiles',
+                             help='Clear cache for all profiles (default: current profile only)')
+    
+    # Daemon commands
+    daemon_parser = subparsers.add_parser('daemon', help='Daemon management (real-time updates)')
+    daemon_parser.add_argument('action', choices=['start', 'stop', 'status', 'restart'],
+                              help='Daemon action to perform')
+    
     # Debug commands
     debug_parser = subparsers.add_parser('debug', help='Debug and diagnostic commands')
     debug_parser.add_argument('action', choices=['cache', 'config', 'purge'], 
@@ -1079,6 +1460,14 @@ def main():
         return cli.cmd_fronting(args.format)
     elif args.command == 'shell':
         return cli.cmd_shell(args.action)
+    elif args.command == 'cache':
+        if args.action == 'clear':
+            return cli.cmd_cache_clear(getattr(args, 'all_profiles', False))
+        else:
+            print(f"Unknown cache action: {args.action}", file=sys.stderr)
+            return 1
+    elif args.command == 'daemon':
+        return cli.cmd_daemon(args.action)
     elif args.command == 'debug':
         return cli.cmd_debug(args.action)
     elif args.command == '_internal_update_status':

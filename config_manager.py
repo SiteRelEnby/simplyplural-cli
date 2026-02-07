@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 import tempfile
 import re
+import hashlib
 
 
 class ConfigManager:
@@ -70,7 +71,7 @@ class ConfigManager:
             return home / '.simply-plural'
     
     def _get_cache_dir(self) -> Path:
-        """Get the appropriate cache directory for the platform"""
+        """Get the appropriate cache directory for the platform (base directory)"""
         
         # Check XDG_CACHE_HOME first (Linux/Unix standard)
         if 'XDG_CACHE_HOME' in os.environ:
@@ -97,6 +98,22 @@ class ConfigManager:
         else:
             # Fallback for unknown platforms
             return home / '.simply-plural' / 'cache'
+    
+    def get_profile_cache_dir(self) -> Path:
+        """Get profile-specific cache directory using hash of profile name + API token
+        
+        This ensures that each profile+token combination has its own isolated cache,
+        preventing cache collisions when switching between profiles/accounts.
+        """
+        # Generate a unique identifier from profile name and API token
+        profile_identifier = f"{self.profile}:{self.api_token or ''}"
+        profile_hash = hashlib.sha256(profile_identifier.encode()).hexdigest()[:16]
+        
+        # Create profile-specific subdirectory
+        profile_cache_dir = self.cache_dir / profile_hash
+        profile_cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        return profile_cache_dir
     
     def _parse_config_file(self, content: str) -> Dict[str, Dict[str, Any]]:
         """Parse key=value config file format with profile sections"""

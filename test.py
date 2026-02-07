@@ -73,7 +73,7 @@ def test_cache_manager():
         from config_manager import ConfigManager
         
         config = ConfigManager()
-        cache = CacheManager(config.cache_dir)
+        cache = CacheManager(config.get_profile_cache_dir())
         
         # Test basic set/get
         test_data = {"test": "data", "timestamp": "2024-01-01"}

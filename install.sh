@@ -48,11 +48,11 @@ success "Python $PYTHON_VERSION found"
 
 # Install dependencies
 info "Installing dependencies..."
-if python3 -m pip install requests; then
+if python3 -m pip install -r requirements.txt; then
     success "Dependencies installed"
 else
     warning "Failed to install dependencies automatically"
-    echo "Please install manually: python3 -m pip install requests"
+    echo "Please install manually: python3 -m pip install -r requirements.txt"
 fi
 
 # Determine installation directory
@@ -77,6 +77,7 @@ chmod +x "$INSTALL_DIR/sp"
 if [ ! -d "$INSTALL_DIR/../share/simply-plural-cli" ]; then
     mkdir -p "$HOME/.local/share/simply-plural-cli"
     cp -f api_client.py cache_manager.py config_manager.py shell_template.sh shell_integration.py "$HOME/.local/share/simply-plural-cli/"
+    cp -f daemon.py daemon_client.py daemon_protocol.py "$HOME/.local/share/simply-plural-cli/"
     cp -f README.md requirements.txt "$HOME/.local/share/simply-plural-cli/"
 fi
 
@@ -106,6 +107,10 @@ echo "Next steps:"
 echo "1. Set up your API token: sp config --setup"
 echo "2. Test basic functionality: sp fronting"
 echo "3. See all commands: sp --help"
+echo ""
+echo "Optional: Start daemon for real-time updates (instant responses):"
+echo "  sp daemon start"
+echo "  sp daemon status"
 echo ""
 echo "For shell integration:"
 echo "  sp config --setup"

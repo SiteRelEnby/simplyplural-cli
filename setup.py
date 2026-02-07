@@ -48,11 +48,11 @@ def main():
     
     # 2. Install dependencies
     print("\n2. Installing dependencies...")
-    if run_command("python -m pip install requests", "Installing requests"):
+    if run_command("python -m pip install -r requirements.txt", "Installing dependencies from requirements.txt"):
         print("  [OK] Dependencies installed")
     else:
         print("  [WARN] Failed to install dependencies. Try manually:")
-        print("    python -m pip install requests")
+        print("    python -m pip install -r requirements.txt")
         return 1
     
     # 3. Test basic functionality
@@ -87,7 +87,11 @@ def main():
     print("  python sp.py --help           # Show all commands")
     print("  python sp.py fronting         # Show current fronters")
     print("  python sp.py members          # List all members")
-    print("  python sp.py switch <name>    # Register a switch")
+    print("  python sp.py switch <n>    # Register a switch")
+    
+    print("\nOptional: Start daemon for real-time updates (instant responses):")
+    print("  python sp.py daemon start     # Start daemon")
+    print("  python sp.py daemon status    # Check daemon status")
     
     print("\nTo use 'sp' instead of 'python sp.py':")
     print("  1. Copy sp.py to a directory in your PATH (e.g., ~/bin)")

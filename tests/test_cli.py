@@ -46,7 +46,7 @@ class TestCLIArgParsing:
             instance = MockCLI.return_value
             instance.cmd_fronting.return_value = 0
             code, _, _ = run_cli("fronting")
-            instance.cmd_fronting.assert_called_once_with("human")
+            instance.cmd_fronting.assert_called_once_with("text")
 
     def test_fronting_json_format(self):
         with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:

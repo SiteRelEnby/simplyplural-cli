@@ -77,7 +77,7 @@ sp switch seraph --note "wouldn't come alive in a perfect life, but that can't b
 The fronting status shows **type indicators** to distinguish between members and custom fronts:
 
 ```bash
-# Show current fronters (human readable)
+# Show current fronters (text format)
 sp fronting
 # Example output: "Currently fronting: Alice, ^Garnet"
 
@@ -378,7 +378,7 @@ sp config --example
 # The config file uses key=value format:
 [default]
 api_token = your-token-here
-default_output_format = human
+default_output_format = text
 cache_custom_fronts_ttl = 3600
 
 # Custom front display options

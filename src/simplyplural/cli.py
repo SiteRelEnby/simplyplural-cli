@@ -270,7 +270,7 @@ class SimplePluralCLI:
                 'config': 'Configuration management:\n  --setup    Run setup wizard\n  --show     Show current config\n  --edit     Edit config file\n  --example  Output example config to stdout\n  --list-profiles    List all profiles\n  --create-profile   Create new profile\n  --delete-profile   Delete a profile',
                 'profiles': 'Profile management:\n  sp --profile <n> <command>     Use specific profile\n  sp config --list-profiles        List profiles\n  sp config --create-profile <n>   Create profile\n  sp config --delete-profile <n>   Delete profile',
                 'switch': 'Switch registration:\n  sp switch <member>               Switch to member\n  sp switch <member1> <member2>    Multiple fronters\n  sp switch --co <member>          Add co-fronter\n  sp switch --add <member>          (alias for --co)\n  sp switch <member> --note "text"  Add note\n  sp sw <member>                   Alias for `sp switch`',
-                'format': 'Output formats:\n  human    Human readable (default)\n  json     JSON for scripts\n  prompt   For shell prompts\n  simple   Just names',
+                'format': 'Output formats:\n  text     Text (default)\n  json     JSON for scripts\n  prompt   For shell prompts\n  simple   Just names',
                 'cache': 'Cache management:\n  sp cache clear          Clear cache for current profile\n  sp cache clear --all    Clear cache for all profiles\n\nCaching behavior:\n  - Fronters cached for 15 minutes\n  - Members cached for 1 hour\n  - Custom fronts cached for 1 hour\n  - Profile-specific cache isolation\n  - Works offline with cached data',
                 'debug': 'Debug mode:\n  sp --debug <command>    Show API calls and responses\n  sp debug cache          Show cache information\n  sp debug config         Show configuration details\n  sp debug purge          Clear cached data (deprecated, use "cache clear")',
                 'shell': 'Shell integration:\n  sp shell generate       Generate shell integration script\n  sp shell install        Generate and show installation instructions',
@@ -292,7 +292,7 @@ class SimplePluralCLI:
         
         return 0
     
-    def cmd_fronting(self, format_type: str = "human"):
+    def cmd_fronting(self, format_type: str = "text"):
         """Show current fronter(s)"""
         try:
             # Try daemon first (instant + always fresh), then cache, then API
@@ -360,7 +360,7 @@ class SimplePluralCLI:
                     print("")
             elif format_type == "simple":
                 print(', '.join(fronter_names) if fronter_names else "No one fronting")
-            else:  # human
+            else:  # text
                 if fronter_names:
                     # Build display names with type indicators
                     display_names = []
@@ -391,7 +391,7 @@ class SimplePluralCLI:
         """List members and optionally custom fronts"""
         try:
             if fronting_only:
-                return self.cmd_fronting("human")
+                return self.cmd_fronting("text")
             
             if self.debug:
                 print("DEBUG: Fetching members list")
@@ -802,7 +802,7 @@ class SimplePluralCLI:
                 "# max_retries = 3",
                 "",
                 "# Display preferences",
-                "# default_output_format = human    # human, json, prompt, simple",
+                "# default_output_format = text    # text, json, prompt, simple",
                 "# show_timestamps = true",
                 "# show_cache_age = true",
                 "# use_colors = true",
@@ -1285,18 +1285,18 @@ def main():
     
     # Fronting command
     fronting_parser = subparsers.add_parser('fronting', help='Show current fronter(s)')
-    fronting_parser.add_argument('--format', choices=['human', 'json', 'prompt', 'simple'], 
-                                default='human', help='Output format')
+    fronting_parser.add_argument('--format', choices=['text', 'json', 'prompt', 'simple'],
+                                default='text', help='Output format')
     
     # Who command (alias for fronting)
     who_parser = subparsers.add_parser('who', help='Show current fronter(s)')
-    who_parser.add_argument('--format', choices=['human', 'json', 'prompt', 'simple'], 
-                           default='human', help='Output format')
+    who_parser.add_argument('--format', choices=['text', 'json', 'prompt', 'simple'],
+                           default='text', help='Output format')
     
     # w command (alias for who)
     w_parser = subparsers.add_parser('w', help='Show current fronter(s)')
-    w_parser.add_argument('--format', choices=['human', 'json', 'prompt', 'simple'],
-                         default='human', help='Output format')
+    w_parser.add_argument('--format', choices=['text', 'json', 'prompt', 'simple'],
+                         default='text', help='Output format')
     # Members command
     members_parser = subparsers.add_parser('members', help='List members')
     members_parser.add_argument('--fronting', action='store_true', help='Show only current fronters')
@@ -1334,7 +1334,7 @@ def main():
     
     # Status command
     status_parser = subparsers.add_parser('status', help='Get status (alias for fronting)')
-    status_parser.add_argument('--format', choices=['human', 'json', 'prompt', 'simple'], 
+    status_parser.add_argument('--format', choices=['text', 'json', 'prompt', 'simple'], 
                               default='prompt', help='Output format')
     
     # Shell integration command

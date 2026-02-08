@@ -99,7 +99,7 @@ def sample_config(tmp_config_dir):
     config_file.write_text(
         '[default]\n'
         'api_token = "test-token-abc123"\n'
-        'default_output_format = "human"\n'
+        'default_output_format = "text"\n'
         'show_custom_front_indicators = true\n'
         'custom_front_indicator_style = "character"\n'
         'custom_front_indicator_character = "^"\n'

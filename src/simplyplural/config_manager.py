@@ -310,7 +310,7 @@ class ConfigManager:
             'max_retries': 3,
             
             # Display Settings
-            'default_output_format': "human",
+            'default_output_format': "text",
             'show_custom_front_indicators': True,
             'custom_front_indicator_style': "character",  # "text" or "character"
             'custom_front_indicator_character': "^",
@@ -439,7 +439,7 @@ class ConfigManager:
     @property
     def default_output_format(self) -> str:
         """Get the default output format"""
-        return self._config.get('default_output_format', 'human')
+        return self._config.get('default_output_format', 'text')
     
     @property
     def show_custom_front_indicators(self) -> bool:
@@ -577,7 +577,7 @@ class ConfigManager:
     @property
     def default_output_format(self) -> str:
         """Get the default output format"""
-        return self._config.get('default_output_format', 'human')
+        return self._config.get('default_output_format', 'text')
     
     # Configuration management methods
     
@@ -608,7 +608,7 @@ class ConfigManager:
                 issues.append(f"{key} cannot be negative")
         
         # Check output format
-        valid_formats = ['human', 'json', 'prompt', 'simple']
+        valid_formats = ['text', 'json', 'prompt', 'simple']
         if self.default_output_format not in valid_formats:
             issues.append(f"Invalid output format '{self.default_output_format}'. Must be one of: {', '.join(valid_formats)}")
         

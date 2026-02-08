@@ -19,7 +19,7 @@ def config_with_dir(tmp_path):
     config_file.write_text(
         '[default]\n'
         'api_token = "test-token"\n'
-        'default_output_format = "human"\n'
+        'default_output_format = "text"\n'
     )
 
     with patch.object(ConfigManager, '_get_config_dir', return_value=config_dir), \
@@ -32,7 +32,7 @@ class TestConfigManager:
         assert config_with_dir.api_token == "test-token"
 
     def test_default_output_format(self, config_with_dir):
-        assert config_with_dir.default_output_format == "human"
+        assert config_with_dir.default_output_format == "text"
 
     def test_is_configured(self, config_with_dir):
         assert config_with_dir.is_configured()

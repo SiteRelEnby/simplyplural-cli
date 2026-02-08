@@ -51,7 +51,7 @@ def test_config_manager():
         
         # Test that values are reasonable (not testing exact defaults since config may exist)
         assert config.cache_fronters_ttl > 0  # Should be positive
-        assert config.default_output_format in ['human', 'json', 'prompt', 'simple']
+        assert config.default_output_format in ['text', 'json', 'prompt', 'simple']
         assert isinstance(config.api_token, (str, type(None)))  # Should be string or None
         
         print("[OK] Config manager basic functionality works")

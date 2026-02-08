@@ -820,12 +820,30 @@ class UnixSocketServer:
                 return Response.success(request.request_id, custom_fronts_data)
             
             elif command == CommandType.SWITCH:
-                # TODO: Implement switch command (will use HTTP API)
-                return Response.error(request.request_id, "Switch command not yet implemented")
-            
+                args = request.args or {}
+                entity_names = args.get('entities', [])
+                note = args.get('note')
+                if not entity_names:
+                    return Response.error(request.request_id, "No entities specified")
+                if not self.state.api:
+                    return Response.error(request.request_id, "No API client available")
+                try:
+                    result = await asyncio.to_thread(
+                        self.state.api.register_switch, entity_names, note
+                    )
+                    # Invalidate fronters cache so next query refreshes
+                    if self.state.cache:
+                        self.state.cache.invalidate_fronters()
+                    return Response.success(request.request_id, {'result': 'ok'})
+                except Exception as e:
+                    return Response.error(request.request_id, str(e))
+
             elif command == CommandType.RELOAD:
-                # TODO: Implement reload command
-                return Response.error(request.request_id, "Reload command not yet implemented")
+                try:
+                    await self.state.initialize()
+                    return Response.success(request.request_id, {'result': 'ok'})
+                except Exception as e:
+                    return Response.error(request.request_id, str(e))
             
             else:
                 return Response.error(request.request_id, f"Unknown command: {command}")

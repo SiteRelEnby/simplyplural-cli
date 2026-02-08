@@ -2,6 +2,22 @@
 
 All notable changes to simplyplural-cli are documented here.
 
+## [0.1.1] - 2026-02-08
+
+### Bug Fixes
+- Fix `switch --co`/`--add`: was crashing when current fronters couldn't be
+  resolved, and only worked with a single name argument
+- Fix history display making N+1 API calls (one per entry); now batch-resolves
+  names from members/custom fronts fetched once
+- Fix history not showing custom front type indicators
+
+### Improvements
+- Implement daemon `switch` command (was a stub returning "not yet implemented")
+- Implement daemon `reload` command to re-initialize state from API
+- `switch --co` now uses daemon-first pattern for getting current fronters
+- History display uses daemon-first pattern for name resolution
+- 74 tests
+
 ## [0.1.0] - 2026-02-07
 
 Initial release.

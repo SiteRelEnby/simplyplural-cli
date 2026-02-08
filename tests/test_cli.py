@@ -136,3 +136,67 @@ class TestAutoStartDaemon:
         cli = self._make_cli(start_daemon=True, daemon_running=True)
         cli._maybe_auto_start_daemon()
         mock_popen.assert_not_called()
+
+
+class TestCoFronting:
+    def _make_cli(self):
+        """Create a SimplyPluralCLI with mocked internals"""
+        with patch.object(SimplyPluralCLI, '__init__', lambda self, *a, **k: None):
+            cli = SimplyPluralCLI.__new__(SimplyPluralCLI)
+        cli.config = MagicMock()
+        cli.config.start_daemon = False
+        cli.config.show_custom_front_indicators = False
+        cli.daemon_client = MagicMock()
+        cli.daemon_client.is_running.return_value = False
+        cli.profile = "default"
+        cli.debug = False
+        cli.cache = MagicMock()
+        cli.cache.invalidate_fronters = MagicMock()
+        cli.api = MagicMock()
+        cli.shell = MagicMock()
+        return cli
+
+    def test_co_adds_to_existing(self):
+        cli = self._make_cli()
+        # Current fronters: Alice
+        cli.api.get_fronters.return_value = [
+            {'name': 'Alice', 'type': 'member'}
+        ]
+        cli.api.register_switch.return_value = {}
+        cli.cmd_switch(['Bob'], note=None, co=True)
+        # Should register switch with both Alice and Bob
+        cli.api.register_switch.assert_called_once_with(['Alice', 'Bob'], None)
+
+    def test_co_multiple_members(self):
+        cli = self._make_cli()
+        # Current fronters: Alice
+        cli.api.get_fronters.return_value = [
+            {'name': 'Alice', 'type': 'member'}
+        ]
+        cli.api.register_switch.return_value = {}
+        cli.cmd_switch(['Bob', 'Charlie'], note=None, co=True)
+        # Should add both Bob and Charlie
+        cli.api.register_switch.assert_called_once_with(
+            ['Alice', 'Bob', 'Charlie'], None)
+
+    def test_co_skips_already_fronting(self):
+        cli = self._make_cli()
+        cli.api.get_fronters.return_value = [
+            {'name': 'Alice', 'type': 'member'}
+        ]
+        cli.api.register_switch.return_value = {}
+        cli.cmd_switch(['Alice'], note=None, co=True)
+        # Alice already fronting, list should just be Alice
+        cli.api.register_switch.assert_called_once_with(['Alice'], None)
+
+    def test_co_filters_unknown_names(self):
+        cli = self._make_cli()
+        # Simulate unresolved fronter
+        cli.api.get_fronters.return_value = [
+            {'name': 'Alice', 'type': 'member'},
+            {'name': 'Unknown', 'type': 'member'},
+        ]
+        cli.api.register_switch.return_value = {}
+        cli.cmd_switch(['Bob'], note=None, co=True)
+        # Unknown should be filtered out
+        cli.api.register_switch.assert_called_once_with(['Alice', 'Bob'], None)

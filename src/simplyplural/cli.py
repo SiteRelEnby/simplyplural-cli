@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 
+from . import __version__
 from .api_client import SimplyPluralAPI, APIError
 from .cache_manager import CacheManager
 from .config_manager import ConfigManager
@@ -1320,8 +1321,13 @@ def main():
                        help='Profile to use (default: default)')
     parser.add_argument('--debug', action='store_true',
                        help='Enable debug output')
-    
+    parser.add_argument('--version', '-V', action='version',
+                       version=f'simplyplural-cli {__version__}')
+
     subparsers = parser.add_subparsers(dest='command', help='Commands')
+
+    # Version command (same as --version but as a subcommand)
+    subparsers.add_parser('version', help='Show version')
     
     # Switch command
     switch_parser = subparsers.add_parser('switch', help='Register a switch')
@@ -1419,7 +1425,11 @@ def main():
     if not args.command:
         parser.print_help()
         return 1
-    
+
+    if args.command == 'version':
+        print(f"simplyplural-cli {__version__}")
+        return 0
+
     cli = SimplyPluralCLI(args.profile, args.debug)
     
     # Route commands

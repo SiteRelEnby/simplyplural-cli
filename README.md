@@ -355,6 +355,7 @@ Simply Plural API
 - WebSocket push updates keep the state current in real time
 - CLI commands query the daemon over a Unix domain socket for instant results
 - If the daemon isn't running, the CLI transparently falls back to the REST API
+- Set `start_daemon = true` in your config to have the CLI auto-start the daemon when needed
 
 ### Daemon with Shell Integration
 
@@ -379,6 +380,7 @@ sp config --example
 [default]
 api_token = your-token-here
 default_output_format = text
+start_daemon = true                        # auto-start daemon on CLI use
 cache_custom_fronts_ttl = 3600
 
 # Custom front display options

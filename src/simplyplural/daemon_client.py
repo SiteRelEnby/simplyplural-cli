@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-from daemon_protocol import (
+from .daemon_protocol import (
     Request,
     Response,
     CommandType,

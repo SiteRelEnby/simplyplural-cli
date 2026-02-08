@@ -23,7 +23,7 @@ except ImportError:
     print("Install with: pip3 install websockets>=12.0")
     sys.exit(1)
 
-from daemon_protocol import (
+from .daemon_protocol import (
     WS_ENDPOINT_PROD,
     WS_KEEPALIVE_INTERVAL,
     WS_KEEPALIVE_MESSAGE,
@@ -935,8 +935,7 @@ async def main():
     if not token:
         # Try to load from config
         try:
-            sys.path.insert(0, str(Path(__file__).parent))
-            from config_manager import ConfigManager
+            from .config_manager import ConfigManager
             config = ConfigManager(args.profile)
             token = config.api_token
         except Exception as e:
@@ -958,10 +957,9 @@ async def main():
     cache_manager_instance = None
     
     try:
-        sys.path.insert(0, str(Path(__file__).parent))
-        from config_manager import ConfigManager
-        from cache_manager import CacheManager
-        from api_client import SimplyPluralAPI
+        from .config_manager import ConfigManager
+        from .cache_manager import CacheManager
+        from .api_client import SimplyPluralAPI
         
         # Load config
         config = ConfigManager(args.profile)
@@ -1022,5 +1020,10 @@ async def main():
         await daemon.stop()
 
 
-if __name__ == '__main__':
+def cli_main():
+    """Entry point for 'python -m simplyplural.daemon'"""
     asyncio.run(main())
+
+
+if __name__ == '__main__':
+    cli_main()

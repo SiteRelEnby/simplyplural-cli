@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simplyplural-cli"
+version = "0.1.0a1"
+description = "Command-line interface for Simply Plural"
+readme = "README.md"
+license = "LGPL-2.1-only"
+requires-python = ">=3.8"
+authors = [
+    { name = "SiteRelEnby" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "requests>=2.25.0",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/SiteRelEnby/simply-plural-cli"
+Repository = "https://github.com/SiteRelEnby/simply-plural-cli"
+Issues = "https://github.com/SiteRelEnby/simply-plural-cli/issues"
+
+[project.scripts]
+sp = "simplyplural.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

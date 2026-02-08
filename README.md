@@ -12,55 +12,26 @@ A command-line interface for [Simply Plural](https://apparyllis.com/), designed 
 - **Backup/export** - Export your data **(WARNING: This feature is not complete, and should not be relied on as your only backup!)**
 - **Daemon mode** - Optional WebSocket daemon for instant responses and real-time updates
 - **Offline-friendly** - Configurable caching reduces API calls, degrades gracefully, and works offline
-- **Cross-platform** - Python 3.x with minimal, easily-findable dependencies.
+- **Cross-platform** - Python 3.9+ with minimal dependencies. Available on PyPI.
 
 ## Installation
 
-### Quick Start
+### From PyPI (recommended)
 ```bash
-# Clone or download the files
+pip install simplyplural-cli
+
+# Then run the setup wizard
+sp config --setup
+```
+
+### From Source
+```bash
 git clone https://github.com/SiteRelEnby/simply-plural-cli.git
 cd simply-plural-cli
+pip install .
 
-# Run the setup script (recommended)
-python3 setup.py
-
-# Or install manually:
-python3 -m pip install requests websockets
-python3 sp.py config --setup
-```
-
-### Unix/Linux/macOS Installation
-```bash
-# Automatic installation
-chmod +x install.sh
-./install.sh
-
-# Then you can use 'sp' from anywhere
-sp --help
-```
-
-### Manual Installation
-```bash
-# Install dependencies
-python3 -m pip install requests websockets
-
-# Copy to your PATH
-[[ ! -d ~/bin ]] && mkdir ~/bin
-cp sp.py ~/bin/sp
-chmod +x ~/bin/sp
-
-# Or create a symlink
-ln -s /path/to/sp.py ~/bin/sp
-```
-
-### Windows Installation
-```cmd
-# Install dependencies
-python -m pip install requests websockets
-
-# Copy to a directory in your PATH or use full path
-copy sp.py C:\Users\%USERNAME%\bin\sp.py
+# Or for development:
+pip install -e ".[dev]"
 ```
 
 ### Setup
@@ -523,9 +494,8 @@ sp config --list-profiles
 ### Common Issues
 
 **"Error: Missing required dependencies"**
-- The CLI will automatically check for required dependencies and tell you exactly what to install
-- Run the suggested `pip3 install` command
-- If you have multiple Python versions, try `python3 -m pip install requests`
+- If installed via pip, dependencies are handled automatically
+- If running from source without installing, run `pip install requests websockets`
 
 **"Error: Not configured"**
 - Run `sp config --setup` to set up your token

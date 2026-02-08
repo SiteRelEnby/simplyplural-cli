@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "simplyplural-cli"
-version = "0.1.0a1"
+version = "0.1.0"
 description = "Command-line interface for Simply Plural"
 readme = "README.md"
 license = "LGPL-2.1-only"
 requires-python = ">=3.8"
 authors = [
-    { name = "SiteRelEnby" },
+    { name = "Site Reliability Enby" },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -38,9 +38,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/SiteRelEnby/simply-plural-cli"
-Repository = "https://github.com/SiteRelEnby/simply-plural-cli"
-Issues = "https://github.com/SiteRelEnby/simply-plural-cli/issues"
+Homepage = "https://github.com/SiteRelEnby/simplyplural-cli"
+Repository = "https://github.com/SiteRelEnby/simplyplural-cli"
+Issues = "https://github.com/SiteRelEnby/simplyplural-cli/issues"
 
 [project.scripts]
 sp = "simplyplural.cli:main"

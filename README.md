@@ -1,5 +1,9 @@
 # Simply Plural CLI
 
+[![PyPI](https://img.shields.io/pypi/v/simplyplural-cli)](https://pypi.org/project/simplyplural-cli/)
+[![Python](https://img.shields.io/pypi/pyversions/simplyplural-cli)](https://pypi.org/project/simplyplural-cli/)
+[![License](https://img.shields.io/pypi/l/simplyplural-cli)](LICENSE)
+
 A command-line interface for [Simply Plural](https://apparyllis.com/), designed for systems who spend a lot of time in terminal/IDE environments. There are also plans to in the future provide system-related functionality for other development tools.
 
 ## Features
@@ -355,7 +359,7 @@ Simply Plural API
 - WebSocket push updates keep the state current in real time
 - CLI commands query the daemon over a Unix domain socket for instant results
 - If the daemon isn't running, the CLI transparently falls back to the REST API
-- Set `start_daemon = true` in your config to have the CLI auto-start the daemon when needed
+- The daemon auto-starts by default; set `start_daemon = false` to disable
 
 ### Daemon with Shell Integration
 

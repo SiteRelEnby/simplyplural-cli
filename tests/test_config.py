@@ -94,5 +94,5 @@ class TestConfigManager:
         assert config_with_dir.cache_fronters_ttl == 900
         assert config_with_dir.cache_members_ttl == 3600
 
-    def test_start_daemon_defaults_false(self, config_with_dir):
-        assert config_with_dir.start_daemon is False
+    def test_start_daemon_defaults_true(self, config_with_dir):
+        assert config_with_dir.start_daemon is True

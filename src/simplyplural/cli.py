@@ -865,7 +865,7 @@ class SimplyPluralCLI:
                 "# cache_switches_ttl = 1800    # 30 minutes",
                 "",
                 "# Daemon",
-                "# start_daemon = false            # auto-start daemon on CLI use",
+                "# start_daemon = true             # auto-start daemon on CLI use",
                 "",
                 "# Shell integration",
                 "# shell_update_interval = 60",

@@ -325,7 +325,7 @@ class ConfigManager:
             'shell_update_interval': 60,
 
             # Daemon
-            'start_daemon': False,
+            'start_daemon': True,
         }
     
     def _save_all_profiles(self, all_profiles: Optional[Dict[str, Dict[str, Any]]] = None):
@@ -452,7 +452,7 @@ class ConfigManager:
     @property
     def start_daemon(self) -> bool:
         """Get whether to auto-start the daemon when not running"""
-        return self._config.get('start_daemon', False)
+        return self._config.get('start_daemon', True)
 
     @property
     def custom_front_indicator_style(self) -> str:

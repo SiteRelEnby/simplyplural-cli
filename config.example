@@ -30,5 +30,8 @@ cache_members_ttl = 3600        # 1 hour
 cache_switches_ttl = 1800       # 30 minutes
 cache_custom_fronts_ttl = 3600  # 1 hour
 
+# Daemon
+# start_daemon = true            # auto-start daemon on CLI use
+
 # Shell Integration
 shell_update_interval = 60      # seconds between background updates

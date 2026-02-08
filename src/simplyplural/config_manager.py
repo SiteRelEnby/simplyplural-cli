@@ -323,6 +323,9 @@ class ConfigManager:
             
             # Shell Integration
             'shell_update_interval': 60,
+
+            # Daemon
+            'start_daemon': False,
         }
     
     def _save_all_profiles(self, all_profiles: Optional[Dict[str, Dict[str, Any]]] = None):
@@ -446,6 +449,11 @@ class ConfigManager:
         """Get whether to show custom front type indicators"""
         return self._config.get('show_custom_front_indicators', True)
     
+    @property
+    def start_daemon(self) -> bool:
+        """Get whether to auto-start the daemon when not running"""
+        return self._config.get('start_daemon', False)
+
     @property
     def custom_front_indicator_style(self) -> str:
         """Get custom front indicator style ('text' or 'character')"""

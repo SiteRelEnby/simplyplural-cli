@@ -39,7 +39,7 @@ class SimplyPluralAPI:
         self.session = requests.Session()
         self.session.headers.update({
             'Authorization': api_token,
-            'User-Agent': 'SimplePlural-CLI/1.0',
+            'User-Agent': 'SimplyPlural-CLI/1.0',
             'Content-Type': 'application/json'
         })
     

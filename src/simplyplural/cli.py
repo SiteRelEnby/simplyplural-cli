@@ -52,7 +52,7 @@ from .shell_integration import ShellIntegrationManager
 from .daemon_client import DaemonClientSync
 
 
-class SimplePluralCLI:
+class SimplyPluralCLI:
     def __init__(self, profile: str = "default", debug: bool = False):
         self.debug = debug
         self.profile = profile
@@ -86,6 +86,8 @@ class SimplePluralCLI:
         Returns:
             Data from daemon or API
         """
+        # Auto-start daemon if configured
+        self._maybe_auto_start_daemon()
         # Try daemon first if it's running
         if self.daemon_client.is_running():
             try:
@@ -116,7 +118,42 @@ class SimplePluralCLI:
             print("[DEBUG] Daemon not running, using API")
         
         return fallback_func(*args, **kwargs)
-    
+
+    def _maybe_auto_start_daemon(self):
+        """Auto-start daemon if configured and not already running."""
+        if not self.config.start_daemon:
+            return
+        if self.daemon_client.is_running():
+            return
+        if self.debug:
+            print("[DEBUG] Daemon not running, auto-starting (start_daemon = true)...")
+        # Reuse the spawn logic from _daemon_start but quietly
+        cmd = [sys.executable, '-m', 'simplyplural.daemon', '--profile', self.profile]
+        if self.debug:
+            cmd.append('--debug')
+        try:
+            if sys.platform == 'win32':
+                subprocess.Popen(
+                    cmd,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            else:
+                subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            time.sleep(2)
+            if self.debug:
+                if self.daemon_client.is_running():
+                    print("[DEBUG] Daemon auto-started successfully")
+                else:
+                    print("[DEBUG] Daemon auto-start: not responding yet, falling back to API")
+        except Exception as e:
+            if self.debug:
+                print(f"[DEBUG] Daemon auto-start failed: {e}")
+
     def cmd_switch(self, members: List[str], note: Optional[str] = None, co: bool = False):
         """Register a switch"""
         if not self.api:
@@ -296,6 +333,7 @@ class SimplePluralCLI:
         """Show current fronter(s)"""
         try:
             # Try daemon first (instant + always fresh), then cache, then API
+            self._maybe_auto_start_daemon()
             if self.daemon_client.is_running():
                 if self.debug:
                     print("[DEBUG] Daemon is running, attempting to fetch from daemon...")
@@ -395,8 +433,9 @@ class SimplePluralCLI:
             
             if self.debug:
                 print("DEBUG: Fetching members list")
-            
+
             # Try daemon first, then cache, then API
+            self._maybe_auto_start_daemon()
             if self.daemon_client.is_running():
                 if self.debug:
                     print("[DEBUG] Daemon is running, attempting to fetch from daemon...")
@@ -501,8 +540,9 @@ class SimplePluralCLI:
         try:
             if self.debug:
                 print("DEBUG: Fetching custom fronts list")
-            
+
             # Try daemon first, then cache, then API
+            self._maybe_auto_start_daemon()
             if self.daemon_client.is_running():
                 if self.debug:
                     print("[DEBUG] Daemon is running, attempting to fetch from daemon...")
@@ -746,12 +786,22 @@ class SimplePluralCLI:
                 test_api.get_fronters()
                 self.config.set_api_token(token)
                 print("[OK] Token validated and saved")
-                
+
+                # Ask about daemon auto-start
+                print("\n3. Daemon mode keeps a live WebSocket connection for instant responses.")
+                print("   Recommended for desktop use. Not needed on servers or in scripts.")
+                daemon_answer = input("\nStart daemon automatically? [Y/n] ").strip().lower()
+                if daemon_answer in ('', 'y', 'yes'):
+                    self.config.set('start_daemon', True)
+                    print("[OK] Daemon will auto-start on next command")
+                else:
+                    print("[OK] Daemon disabled (start manually with 'sp daemon start')")
+
                 # Create example config for reference
                 example_file = self.config.create_example_config()
                 print(f"\n[OK] Example config created at: {example_file}")
                 print("  You can edit this file to customize settings")
-                
+
                 print(f"\n[OK] Setup complete!")
                 print(f"\nOptional: Generate shell integration with 'sp shell install'")
                     
@@ -812,6 +862,9 @@ class SimplePluralCLI:
                 "# cache_fronters_ttl = 300     # 5 minutes",
                 "# cache_members_ttl = 3600     # 1 hour",
                 "# cache_switches_ttl = 1800    # 30 minutes",
+                "",
+                "# Daemon",
+                "# start_daemon = false            # auto-start daemon on CLI use",
                 "",
                 "# Shell integration",
                 "# shell_update_interval = 60",
@@ -1367,7 +1420,7 @@ def main():
         parser.print_help()
         return 1
     
-    cli = SimplePluralCLI(args.profile, args.debug)
+    cli = SimplyPluralCLI(args.profile, args.debug)
     
     # Route commands
     if args.command in ['switch','sw']:

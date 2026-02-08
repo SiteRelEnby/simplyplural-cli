@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from io import StringIO
 
-from simplyplural.cli import main
+from simplyplural.cli import main, SimplyPluralCLI
 
 
 def run_cli(*args):
@@ -42,64 +42,97 @@ class TestCLIArgParsing:
     def test_fronting_default_format(self):
         """Verify fronting command parses and tries to run"""
         # This will fail because there's no config, but it proves parsing works
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_fronting.return_value = 0
             code, _, _ = run_cli("fronting")
             instance.cmd_fronting.assert_called_once_with("text")
 
     def test_fronting_json_format(self):
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_fronting.return_value = 0
             code, _, _ = run_cli("fronting", "--format=json")
             instance.cmd_fronting.assert_called_once_with("json")
 
     def test_who_alias(self):
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_fronting.return_value = 0
             run_cli("who")
             instance.cmd_fronting.assert_called_once()
 
     def test_w_alias(self):
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_fronting.return_value = 0
             run_cli("w")
             instance.cmd_fronting.assert_called_once()
 
     def test_switch_passes_members(self):
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_switch.return_value = 0
             run_cli("switch", "Alice", "Bob")
             instance.cmd_switch.assert_called_once_with(["Alice", "Bob"], None, False)
 
     def test_switch_co_flag(self):
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_switch.return_value = 0
             run_cli("switch", "--co", "Alice")
             instance.cmd_switch.assert_called_once_with(["Alice"], None, True)
 
     def test_daemon_start(self):
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_daemon.return_value = 0
             run_cli("daemon", "start")
             instance.cmd_daemon.assert_called_once_with("start")
 
     def test_profile_flag(self):
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_fronting.return_value = 0
             run_cli("--profile", "alt", "fronting")
             MockCLI.assert_called_once_with("alt", False)
 
     def test_debug_flag(self):
-        with patch("simplyplural.cli.SimplePluralCLI") as MockCLI:
+        with patch("simplyplural.cli.SimplyPluralCLI") as MockCLI:
             instance = MockCLI.return_value
             instance.cmd_fronting.return_value = 0
             run_cli("--debug", "fronting")
             MockCLI.assert_called_once_with("default", True)
+
+
+class TestAutoStartDaemon:
+    def _make_cli(self, start_daemon=False, daemon_running=False):
+        """Create a SimplyPluralCLI with mocked internals"""
+        with patch.object(SimplyPluralCLI, '__init__', lambda self, *a, **k: None):
+            cli = SimplyPluralCLI.__new__(SimplyPluralCLI)
+        cli.config = MagicMock()
+        cli.config.start_daemon = start_daemon
+        cli.daemon_client = MagicMock()
+        cli.daemon_client.is_running.return_value = daemon_running
+        cli.profile = "default"
+        cli.debug = False
+        return cli
+
+    @patch("simplyplural.cli.time.sleep")
+    @patch("simplyplural.cli.subprocess.Popen")
+    def test_auto_start_when_configured(self, mock_popen, _sleep):
+        cli = self._make_cli(start_daemon=True, daemon_running=False)
+        cli._maybe_auto_start_daemon()
+        mock_popen.assert_called_once()
+
+    @patch("simplyplural.cli.subprocess.Popen")
+    def test_no_auto_start_when_disabled(self, mock_popen):
+        cli = self._make_cli(start_daemon=False, daemon_running=False)
+        cli._maybe_auto_start_daemon()
+        mock_popen.assert_not_called()
+
+    @patch("simplyplural.cli.subprocess.Popen")
+    def test_no_auto_start_when_already_running(self, mock_popen):
+        cli = self._make_cli(start_daemon=True, daemon_running=True)
+        cli._maybe_auto_start_daemon()
+        mock_popen.assert_not_called()

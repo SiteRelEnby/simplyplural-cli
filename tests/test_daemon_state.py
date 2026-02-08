@@ -95,6 +95,31 @@ class TestDaemonStateUpdates:
         assert state.update_count == 2
 
 
+class TestDaemonStateNameResolution:
+    async def test_front_history_resolves_member_names(self, state):
+        """Fronter names should be resolved from in-memory member data"""
+        state.members["m1"] = {"content": {"name": "Alice"}}
+        state.members["m2"] = {"content": {"name": "Bob"}}
+
+        state.front_history["f1"] = {"member": "m1", "live": True, "startTime": 1000}
+        new_content = {"member": "m2", "live": True, "startTime": 2000}
+        await state.handle_update("frontHistory", "insert", "f2", new_content)
+
+        names = [f.get("name") for f in state.current_fronters]
+        assert "Alice" in names
+        assert "Bob" in names
+
+    async def test_front_history_resolves_custom_front_names(self, state):
+        """Custom front names should also be resolved"""
+        state.custom_fronts["cf1"] = {"content": {"name": "Garnet"}}
+
+        new_content = {"member": "cf1", "custom": True, "live": True, "startTime": 1000}
+        await state.handle_update("frontHistory", "insert", "f1", new_content)
+
+        assert state.current_fronters[0]["name"] == "Garnet"
+        assert state.current_fronters[0]["type"] == "custom_front"
+
+
 class TestDaemonStateQueries:
     def test_get_fronters_empty(self, state):
         result = state.get_fronters()

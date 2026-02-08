@@ -160,18 +160,24 @@ class SimplyPluralCLI:
         if not self.api:
             print("Error: Not configured. Run 'sp config --setup'", file=sys.stderr)
             return 1
-            
+
         try:
-            if co and len(members) == 1:
-                # Add co-fronter to existing fronters
-                current = self.api.get_fronters()
+            if co:
+                # Add co-fronter(s) to existing fronters
+                current = self._try_daemon_or_api('get_fronters', self.api.get_fronters)
                 # Handle both list and dict responses
                 if isinstance(current, list):
-                    current_names = [f.get('name', 'Unknown') for f in current]
+                    fronter_list = current
                 else:
-                    current_names = [f.get('name', 'Unknown') for f in current.get('fronters', [])]
-                if members[0] not in current_names:
-                    members = current_names + members
+                    fronter_list = current.get('fronters', [])
+                # Filter out unresolved names
+                current_names = [f.get('name') for f in fronter_list
+                                 if f.get('name') and f.get('name') != 'Unknown']
+                # Add new members that aren't already fronting
+                for name in members:
+                    if name not in current_names:
+                        current_names.append(name)
+                members = current_names
             
             result = self.api.register_switch(members, note)
             
@@ -618,7 +624,7 @@ class SimplyPluralCLI:
         if not self.api:
             print("Error: Not configured. Run 'sp config --setup'", file=sys.stderr)
             return 1
-        
+
         # Validate count parameter
         if count < 1:
             print("Error: Count must be at least 1", file=sys.stderr)
@@ -626,14 +632,35 @@ class SimplyPluralCLI:
         elif count > 1000:
             print(f"Warning: Count limited to 1000 (requested {count})")
             count = 1000
-            
+
         try:
             switches = self.api.get_switches(period, count)
-            
+
             if not switches:
                 print("No switch history found")
                 return 0
-                
+
+            # Batch-resolve names: fetch members and custom fronts once
+            try:
+                all_members = self._try_daemon_or_api('get_members', self.api.get_members)
+                if isinstance(all_members, list):
+                    member_map = {m.get('id') or m.get('_id'): m.get('content', {}).get('name', 'Unknown')
+                                  for m in all_members}
+                else:
+                    member_map = {}
+            except Exception:
+                member_map = {}
+
+            try:
+                all_cfs = self._try_daemon_or_api('get_custom_fronts', self.api.get_custom_fronts)
+                if isinstance(all_cfs, list):
+                    cf_map = {cf.get('id') or cf.get('_id'): cf.get('content', {}).get('name', 'Unknown')
+                              for cf in all_cfs}
+                else:
+                    cf_map = {}
+            except Exception:
+                cf_map = {}
+
             print("Recent switches:")
             for switch in switches[:count]:
                 # Extract data from frontHistory structure
@@ -641,31 +668,31 @@ class SimplyPluralCLI:
                 start_time = content.get('startTime', 0)
                 end_time = content.get('endTime', 0)
                 member_id = content.get('member', '')
-                
-                # Get member name with better error handling
-                member_name = "Unknown"
+                is_custom = content.get('custom', False)
+
+                # Resolve name from pre-fetched maps
                 if member_id:
-                    try:
-                        member = self.api.get_member(member_id)
-                        member_name = member.get('content', {}).get('name', f"ID-{member_id[:8]}")
-                    except APIError as e:
-                        # For 404s (deleted members), show a cleaner fallback
-                        if "not found" in str(e).lower():
-                            member_name = f"[Deleted member {member_id[:8]}]"
-                        else:
-                            member_name = f"ID-{member_id[:8]}"
-                
+                    if is_custom:
+                        member_name = cf_map.get(member_id, f"ID-{member_id[:8]}")
+                    else:
+                        member_name = member_map.get(member_id, f"ID-{member_id[:8]}")
+                else:
+                    member_name = "Unknown"
+
+                # Format with type indicator
+                display_name = self._format_entity_name(
+                    member_name, 'custom_front' if is_custom else 'member')
+
                 # Format timestamp from startTime (milliseconds)
                 try:
                     if start_time:
-                        # Convert from milliseconds to seconds
                         timestamp_seconds = start_time / 1000
                         time_str = time.strftime("%m/%d %H:%M", time.localtime(timestamp_seconds))
                     else:
                         time_str = "Unknown"
-                except:
+                except Exception:
                     time_str = "Unknown"
-                
+
                 # Format duration if we have end time
                 duration_str = ""
                 if end_time and start_time:
@@ -678,13 +705,13 @@ class SimplyPluralCLI:
                         duration_str = f" ({duration_minutes:.0f}m)"
                 elif not end_time and content.get('live', False):
                     duration_str = " (ongoing)"
-                
-                print(f"  {time_str} - {member_name}{duration_str}")
-                    
+
+                print(f"  {time_str} - {display_name}{duration_str}")
+
         except APIError as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1
-            
+
         return 0
     
     def cmd_backup(self, output_file: Optional[str] = None):

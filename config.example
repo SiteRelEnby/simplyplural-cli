@@ -11,8 +11,8 @@ api_token = ""
 # max_retries = 3
 
 # Default Output Format
-# Options: human, json, prompt, simple
-default_output_format = "human"
+# Options: text, json, prompt, simple
+default_output_format = "text"
 
 # Custom Front Display Settings
 # Show type indicators for custom fronts (true/false)

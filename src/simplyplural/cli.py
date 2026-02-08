@@ -1121,137 +1121,68 @@ class SimplyPluralCLI:
         return 0
     
     def cmd_internal_update_status(self):
-        """Internal command for shell prompt - fast cache-only lookup with smart fallbacks"""
+        """Internal command for shell prompt - daemon-first with cache fallback"""
+        status_text = ""
+        should_refresh = False
+
         try:
-            if self.debug:
-                print("DEBUG: Starting internal status update")
-                
-            # Check cache with expiry information
-            fronters = self.cache.get_fronters()
-            cache_timestamp = self.cache.get_fronters_timestamp()
-            
-            if self.debug:
-                print(f"DEBUG: Cache fronters: {fronters}")
-                print(f"DEBUG: Cache timestamp: {cache_timestamp}")
-            
-            status_text = ""
-            should_refresh = False
-            
-            if fronters and cache_timestamp:
-                # We have cached data - check if it's fresh
-                cache_age = int(time.time() - cache_timestamp)
-                fronter_names = [f.get('name', 'Unknown') for f in fronters if f.get('name') != 'Unknown']
-                
-                if self.debug:
-                    print(f"DEBUG: Cache age: {cache_age}s, TTL: {self.config.cache_fronters_ttl}s")
-                    print(f"DEBUG: Extracted fronter names: {fronter_names}")
-                
-                if fronter_names:
-                    if cache_age <= self.config.cache_fronters_ttl:
-                        # Fresh data
-                        status_text = f"[{', '.join(fronter_names)}] "
-                        if self.debug:
-                            print(f"DEBUG: Using fresh cached data: '{status_text.strip()}'")
+            # Daemon path: instant and always fresh
+            self._maybe_auto_start_daemon()
+            if self.daemon_client.is_running():
+                try:
+                    result = self.daemon_client.get_fronters()
+                    fronters = result.get('fronters', [])
+                    names = [f.get('name', 'Unknown') for f in fronters if f.get('name') != 'Unknown']
+                    if names:
+                        status_text = f"[{', '.join(names)}] "
                     else:
-                        # Expired data - show with prefix indicator
-                        status_text = f"~[{', '.join(fronter_names)}] "
+                        status_text = ""
+                    if self.debug:
+                        print(f"DEBUG: Got fronters from daemon: '{status_text.strip()}'")
+                except Exception as e:
+                    if self.debug:
+                        print(f"DEBUG: Daemon error: {e}, falling back to cache")
+
+            # Cache fallback if daemon didn't provide data
+            if not status_text:
+                fronters = self.cache.get_fronters()
+                cache_timestamp = self.cache.get_fronters_timestamp()
+
+                if fronters and cache_timestamp:
+                    cache_age = int(time.time() - cache_timestamp)
+                    names = [f.get('name', 'Unknown') for f in fronters if f.get('name') != 'Unknown']
+                    if names:
+                        if cache_age <= self.config.cache_fronters_ttl:
+                            status_text = f"[{', '.join(names)}] "
+                        else:
+                            status_text = f"~[{', '.join(names)}] "
+                            should_refresh = True
+                    else:
+                        status_text = "(updating) "
                         should_refresh = True
-                        if self.debug:
-                            print(f"DEBUG: Using expired cached data: '{status_text.strip()}', will refresh")
                 else:
-                    # No valid names in cache
                     status_text = "(updating) "
                     should_refresh = True
-                    if self.debug:
-                        print("DEBUG: No valid names in cache, showing 'updating'")
-            else:
-                # No cached data at all
-                status_text = "(updating) "
-                should_refresh = True
-                if self.debug:
-                    print("DEBUG: No cached data at all, showing 'updating'")
-            
-            # Write current status (even if stale/updating)
-            status_file = Path.home() / '.cache' / 'sp_status'
-            status_file.parent.mkdir(exist_ok=True)
-            
-            if self.debug:
-                print(f"DEBUG: Writing status to {status_file}: '{status_text.strip()}'")
-            
-            # Atomic write
-            temp_file = status_file.with_suffix('.tmp')
-            with open(temp_file, 'w') as f:
-                f.write(status_text)
-            temp_file.replace(status_file)
-            
-            if self.debug:
-                print(f"DEBUG: Status file written successfully")
-            
-            # Start background refresh if needed (non-blocking)
-            if should_refresh:
-                if self.debug:
-                    print("DEBUG: Starting background refresh")
-                self._start_background_refresh()
-            
+
         except Exception as e:
             if self.debug:
-                print(f"DEBUG: Exception in internal_update_status: {type(e).__name__}: {e}")
-                import traceback
-                traceback.print_exc()
-            
-            # Check cache with expiry information
-            fronters = self.cache.get_fronters()
-            cache_timestamp = self.cache.get_fronters_timestamp()
-            
-            status_text = ""
-            should_refresh = False
-            
-            if fronters and cache_timestamp:
-                # We have cached data - check if it's fresh
-                cache_age = int(time.time() - cache_timestamp)
-                fronter_names = [f.get('name', 'Unknown') for f in fronters if f.get('name') != 'Unknown']
-                
-                if fronter_names:
-                    if cache_age <= self.config.cache_fronters_ttl:
-                        # Fresh data
-                        status_text = f"[{', '.join(fronter_names)}] "
-                    else:
-                        # Expired data - show with prefix indicator
-                        status_text = f"~[{', '.join(fronter_names)}] "
-                        should_refresh = True
-                else:
-                    # No valid names in cache
-                    status_text = "(updating) "
-                    should_refresh = True
-            else:
-                # No cached data at all
-                status_text = "(updating) "
-                should_refresh = True
-            
-            # Write current status (even if stale/updating)
+                print(f"DEBUG: internal_update_status error: {e}")
+            status_text = status_text or "(error) "
+
+        # Atomic write to status file
+        try:
             status_file = Path.home() / '.cache' / 'sp_status'
             status_file.parent.mkdir(exist_ok=True)
-            
-            # Atomic write
             temp_file = status_file.with_suffix('.tmp')
             with open(temp_file, 'w') as f:
                 f.write(status_text)
             temp_file.replace(status_file)
-            
-            # Start background refresh if needed (non-blocking)
-            if should_refresh:
-                self._start_background_refresh()
-            
         except Exception:
-            # Fail silently for shell integration - write fallback status
-            try:
-                status_file = Path.home() / '.cache' / 'sp_status'
-                status_file.parent.mkdir(exist_ok=True)
-                with open(status_file, 'w') as f:
-                    f.write("(error) ")  # Show something went wrong
-            except:
-                pass  # Give up silently
-            
+            pass
+
+        if should_refresh:
+            self._start_background_refresh()
+
         return 0
     
     def _start_background_refresh(self):

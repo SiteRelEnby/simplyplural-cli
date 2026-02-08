@@ -359,7 +359,7 @@ Simply Plural API
 
 ### Daemon with Shell Integration
 
-When the daemon is running, shell prompt updates reflect switches immediately rather than waiting for cache expiry.
+When the daemon is running, shell prompt updates reflect all switches in real time — including ones made from the app or by other system members.
 
 ## Configuration
 

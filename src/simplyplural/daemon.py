@@ -523,14 +523,27 @@ class DaemonState:
             self.front_history[obj_id] = content
         
         # Rebuild current fronters list from live front history entries
-        live_fronts = [
-            entry for entry in self.front_history.values()
-            if entry.get('live', False)
-        ]
-        
+        live_fronts = []
+        for entry in self.front_history.values():
+            if not entry.get('live', False):
+                continue
+            resolved = entry.copy()
+            member_id = entry.get('member')
+            if member_id and 'name' not in resolved:
+                is_custom = entry.get('custom', False)
+                if is_custom and member_id in self.custom_fronts:
+                    cf = self.custom_fronts[member_id]
+                    resolved['name'] = cf.get('content', cf).get('name', member_id)
+                    resolved['type'] = 'custom_front'
+                elif member_id in self.members:
+                    m = self.members[member_id]
+                    resolved['name'] = m.get('content', m).get('name', member_id)
+                    resolved['type'] = 'member'
+            live_fronts.append(resolved)
+
         # Sort by start time (most recent first)
         live_fronts.sort(key=lambda x: x.get('startTime', 0), reverse=True)
-        
+
         self.current_fronters = live_fronts
         self.logger.info(f"Updated current fronters: {len(live_fronts)} live")
         

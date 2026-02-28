@@ -3,6 +3,8 @@
 [![PyPI](https://img.shields.io/pypi/v/simplyplural-cli)](https://pypi.org/project/simplyplural-cli/)
 [![Python](https://img.shields.io/pypi/pyversions/simplyplural-cli)](https://pypi.org/project/simplyplural-cli/)
 [![License](https://img.shields.io/pypi/l/simplyplural-cli)](LICENSE)
+![transrights](https://pride-badges.pony.workers.dev/static/v1?label=trans%20rights&stripeWidth=6&stripeColors=5BCEFA,F5A9B8,FFFFFF,F5A9B8,5BCEFA)
+![enbyware](https://pride-badges.pony.workers.dev/static/v1?label=enbyware&labelColor=%23555&stripeWidth=8&stripeColors=FCF434%2CFFFFFF%2C9C59D1%2C2C2C2C)
 
 A command-line interface for [Simply Plural](https://apparyllis.com/), designed for systems who spend a lot of time in terminal/IDE environments. There are also plans to in the future provide system-related functionality for other development tools.
 
